@@ -29,6 +29,7 @@ jobs:
             # 3️⃣ Crear un Dockerfile dinámicamente si no existe
       - name: Crear Dockerfile dinámicamente
         run: |
+          cd ${{ github.event.inputs.repo_name }}
           if [ ! -f "Dockerfile" ]; then
             echo 'FROM node:18-alpine' > Dockerfile
             echo 'WORKDIR /app' >> Dockerfile
@@ -38,6 +39,7 @@ jobs:
             echo 'EXPOSE 3000' >> Dockerfile
             echo 'CMD ["npm", "start"]' >> Dockerfile
           fi
+
 
 
       # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente

@@ -22,31 +22,39 @@ jobs:
       # 2️⃣ Clonar el repositorio a desplegar
       - name: Clonar el repositorio a desplegar
         run: |
-          git clone https://github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
+          git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
           cd ${{ github.event.inputs.repo_name }}
 
-      # 3️⃣ Iniciar sesión en DigitalOcean
+      # 3️⃣ Verificar archivo deployment.yaml
+      - name: Verificar archivo deployment.yaml
+        run: |
+          if [ ! -f "k8s/deployment.yaml" ]; then
+            echo "Error: El archivo k8s/deployment.yaml no existe."
+            exit 1
+          fi
+
+      # 4️⃣ Iniciar sesión en DigitalOcean
       - name: Iniciar sesión en DigitalOcean
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      # 4️⃣ Iniciar sesión en el Container Registry de DigitalOcean
+      # 5️⃣ Iniciar sesión en el Container Registry de DigitalOcean
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      # 5️⃣ Construir y subir la imagen Docker
+      # 6️⃣ Construir y subir la imagen Docker
       - name: Construir y subir imagen Docker
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${{ github.event.inputs.repo_name }}:latest .
           docker push registry.digitalocean.com/cosmly-registry/${{ github.event.inputs.repo_name }}:latest
 
-      # 6️⃣ Configurar kubectl para acceder al clúster de Kubernetes
+      # 7️⃣ Configurar kubectl para acceder al clúster de Kubernetes
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save my-cluster
 
-      # 7️⃣ Desplegar en Kubernetes
+      # 8️⃣ Desplegar en Kubernetes
       - name: Desplegar en Kubernetes
         run: |
           cd ${{ github.event.inputs.repo_name }}

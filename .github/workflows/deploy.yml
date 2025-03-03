@@ -1,0 +1,54 @@
+name: Deploy Any Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_name:
+        description: 'Nombre del repositorio a desplegar'
+        required: true
+      repo_owner:
+        description: 'Propietario del repositorio (usuario u organización)'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout del repositorio centralizado (deploy-orchestrator)
+      - name: Checkout código del repositorio centralizado
+        uses: actions/checkout@v4
+
+      # 2️⃣ Clonar el repositorio a desplegar
+      - name: Clonar el repositorio a desplegar
+        run: |
+          git clone https://github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
+          cd ${{ github.event.inputs.repo_name }}
+
+      # 3️⃣ Iniciar sesión en DigitalOcean
+      - name: Iniciar sesión en DigitalOcean
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      # 4️⃣ Iniciar sesión en el Container Registry de DigitalOcean
+      - name: Iniciar sesión en el Container Registry
+        run: doctl registry login
+
+      # 5️⃣ Construir y subir la imagen Docker
+      - name: Construir y subir imagen Docker
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          docker build -t registry.digitalocean.com/cosmly-registry/${{ github.event.inputs.repo_name }}:latest .
+          docker push registry.digitalocean.com/cosmly-registry/${{ github.event.inputs.repo_name }}:latest
+
+      # 6️⃣ Configurar kubectl para acceder al clúster de Kubernetes
+      - name: Configurar kubectl
+        run: doctl kubernetes cluster kubeconfig save my-cluster
+
+      # 7️⃣ Desplegar en Kubernetes
+      - name: Desplegar en Kubernetes
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          kubectl apply -f k8s/deployment.yaml
+          kubectl rollout restart deployment/${{ github.event.inputs.repo_name }}

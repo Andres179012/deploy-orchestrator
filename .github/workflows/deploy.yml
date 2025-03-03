@@ -26,18 +26,18 @@ jobs:
           cd ${{ github.event.inputs.repo_name }}
 
       # 3️⃣ Crear un Dockerfile dinámicamente si no existe
-            # 3️⃣ Crear un Dockerfile dinámicamente si no existe
       - name: Crear Dockerfile dinámicamente
         run: |
-          cd ${{ github.event.inputs.repo_name }}
           if [ ! -f "Dockerfile" ]; then
-            echo 'FROM node:18-alpine' > Dockerfile
-            echo 'WORKDIR /app' >> Dockerfile
-            echo 'COPY package*.json ./' >> Dockerfile
-            echo 'RUN npm install --legacy-peer-deps' >> Dockerfile
-            echo 'COPY . .' >> Dockerfile
-            echo 'EXPOSE 3000' >> Dockerfile
-            echo 'CMD ["npm", "start"]' >> Dockerfile
+            cat <<EOF > Dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+EOF
           fi
 
       # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
@@ -45,39 +45,44 @@ jobs:
         run: |
           mkdir -p k8s
           cat <<EOF > k8s/deployment.yaml
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: ${{ github.event.inputs.repo_name }}
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: ${{ github.event.inputs.repo_name }}
-            template:
-              metadata:
-                labels:
-                  app: ${{ github.event.inputs.repo_name }}
-              spec:
-                containers:
-                  - name: ${{ github.event.inputs.repo_name }}
-                    image: registry.digitalocean.com/cosmly-registry/$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]'):latest
-                    ports:
-                      - containerPort: 3000
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: ${{ github.event.inputs.repo_name }}-service
-          spec:
-            selector:
-              app: ${{ github.event.inputs.repo_name }}
-            ports:
-              - protocol: TCP
-                port: 80
-                targetPort: 3000
-            type: LoadBalancer
-          EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${{ github.event.inputs.repo_name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${{ github.event.inputs.repo_name }}
+  template:
+    metadata:
+      labels:
+        app: ${{ github.event.inputs.repo_name }}
+    spec:
+      containers:
+        - name: ${{ github.event.inputs.repo_name }}
+          image: registry.digitalocean.com/cosmly-registry/$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]'):latest
+          ports:
+            - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${{ github.event.inputs.repo_name }}-service
+spec:
+  selector:
+    app: ${{ github.event.inputs.repo_name }}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer
+EOF
+
+      # Verificar que el archivo deployment.yaml se creó correctamente
+      - name: Verificar creación de deployment.yaml
+        run: |
+          ls -l k8s/deployment.yaml
 
       # 5️⃣ Iniciar sesión en DigitalOcean
       - name: Iniciar sesión en DigitalOcean
@@ -99,7 +104,7 @@ jobs:
 
       # 8️⃣ Configurar kubectl para acceder al clúster de Kubernetes
       - name: Configurar kubectl
-        run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
+        run: doctl kubernetes cluster kubeconfig save my-cluster
 
       # 9️⃣ Desplegar en Kubernetes
       - name: Desplegar en Kubernetes

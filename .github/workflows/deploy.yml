@@ -46,7 +46,7 @@ jobs:
               spec:
                 containers:
                   - name: ${{ github.event.inputs.repo_name }}
-                    image: registry.digitalocean.com/cosmly-registry/${{ github.event.inputs.repo_name }}:latest
+                    image: registry.digitalocean.com/cosmly-registry/$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]'):latest
                     ports:
                       - containerPort: 3000
           ---
@@ -78,8 +78,9 @@ jobs:
       - name: Construir y subir imagen Docker
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          docker build -t registry.digitalocean.com/cosmly-registry/${{ github.event.inputs.repo_name }}:latest .
-          docker push registry.digitalocean.com/cosmly-registry/${{ github.event.inputs.repo_name }}:latest
+          REPO_NAME_LOWER=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')
+          docker build -t registry.digitalocean.com/cosmly-registry/$REPO_NAME_LOWER:latest .
+          docker push registry.digitalocean.com/cosmly-registry/$REPO_NAME_LOWER:latest
 
       # 7️⃣ Configurar kubectl para acceder al clúster de Kubernetes
       - name: Configurar kubectl

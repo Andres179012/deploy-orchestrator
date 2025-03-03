@@ -19,7 +19,6 @@ jobs:
           git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{
           github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name
           }}.git
-
           cd ${{ github.event.inputs.repo_name }}
       - name: Crear Dockerfile dinámicamente
         run: |

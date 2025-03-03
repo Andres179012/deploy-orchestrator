@@ -42,43 +42,46 @@ jobs:
 
       # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
             # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
+            # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
       - name: Crear archivo deployment.yaml
         run: |
+          cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s
           cat <<EOF > k8s/deployment.yaml
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: ${{ github.event.inputs.repo_name }}
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: ${{ github.event.inputs.repo_name }}
-            template:
-              metadata:
-                labels:
+            apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: ${{ github.event.inputs.repo_name }}
+            spec:
+              replicas: 1
+              selector:
+                matchLabels:
                   app: ${{ github.event.inputs.repo_name }}
-              spec:
-                containers:
-                  - name: ${{ github.event.inputs.repo_name }}
-                    image: registry.digitalocean.com/cosmly-registry/$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]'):latest
-                    ports:
-                      - containerPort: 3000
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: ${{ github.event.inputs.repo_name }}-service
-          spec:
-            selector:
-              app: ${{ github.event.inputs.repo_name }}
-            ports:
-              - protocol: TCP
-                port: 80
-                targetPort: 3000
-            type: LoadBalancer
-          EOF
+              template:
+                metadata:
+                  labels:
+                    app: ${{ github.event.inputs.repo_name }}
+                spec:
+                  containers:
+                    - name: ${{ github.event.inputs.repo_name }}
+                      image: registry.digitalocean.com/cosmly-registry/$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]'):latest
+                      ports:
+                        - containerPort: 3000
+            ---
+            apiVersion: v1
+            kind: Service
+            metadata:
+              name: ${{ github.event.inputs.repo_name }}-service
+            spec:
+              selector:
+                app: ${{ github.event.inputs.repo_name }}
+              ports:
+                - protocol: TCP
+                  port: 80
+                  targetPort: 3000
+              type: LoadBalancer
+            EOF
+
 
 
       # 5️⃣ Iniciar sesión en DigitalOcean

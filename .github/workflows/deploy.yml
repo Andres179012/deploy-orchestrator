@@ -41,6 +41,7 @@ jobs:
           fi
 
       # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
+            # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
       - name: Crear archivo deployment.yaml
         run: |
           mkdir -p k8s
@@ -78,6 +79,7 @@ jobs:
                 targetPort: 3000
             type: LoadBalancer
           EOF
+
 
       # 5️⃣ Iniciar sesión en DigitalOcean
       - name: Iniciar sesión en DigitalOcean

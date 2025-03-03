@@ -26,18 +26,19 @@ jobs:
           cd ${{ github.event.inputs.repo_name }}
 
       # 3️⃣ Crear un Dockerfile dinámicamente si no existe
+            # 3️⃣ Crear un Dockerfile dinámicamente si no existe
       - name: Crear Dockerfile dinámicamente
         run: |
           if [ ! -f "Dockerfile" ]; then
             cat <<EOF > Dockerfile
-            FROM node:18-alpine
-            WORKDIR /app
-            COPY package*.json ./
-            RUN npm install
-            COPY . .
-            EXPOSE 3000
-            CMD ["npm", "start"]
-            EOF
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+EOF
           fi
 
       # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente

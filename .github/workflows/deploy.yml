@@ -25,13 +25,44 @@ jobs:
           git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
           cd ${{ github.event.inputs.repo_name }}
 
-      # 3️⃣ Verificar archivo deployment.yaml
-      - name: Verificar archivo deployment.yaml
+      # 3️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
+      - name: Crear archivo deployment.yaml
         run: |
-          if [ ! -f "k8s/deployment.yaml" ]; then
-            echo "Error: El archivo k8s/deployment.yaml no existe."
-            exit 1
-          fi
+          mkdir -p k8s
+          cat <<EOF > k8s/deployment.yaml
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${{ github.event.inputs.repo_name }}
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: ${{ github.event.inputs.repo_name }}
+            template:
+              metadata:
+                labels:
+                  app: ${{ github.event.inputs.repo_name }}
+              spec:
+                containers:
+                  - name: ${{ github.event.inputs.repo_name }}
+                    image: registry.digitalocean.com/cosmly-registry/${{ github.event.inputs.repo_name }}:latest
+                    ports:
+                      - containerPort: 3000
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${{ github.event.inputs.repo_name }}-service
+          spec:
+            selector:
+              app: ${{ github.event.inputs.repo_name }}
+            ports:
+              - protocol: TCP
+                port: 80
+                targetPort: 3000
+            type: LoadBalancer
+          EOF
 
       # 4️⃣ Iniciar sesión en DigitalOcean
       - name: Iniciar sesión en DigitalOcean

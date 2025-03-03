@@ -30,16 +30,15 @@ jobs:
       - name: Crear Dockerfile dinámicamente
         run: |
           if [ ! -f "Dockerfile" ]; then
-            cat <<EOF > Dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-EXPOSE 3000
-CMD ["npm", "start"]
-EOF
+            echo 'FROM node:18-alpine' > Dockerfile
+            echo 'WORKDIR /app' >> Dockerfile
+            echo 'COPY package*.json ./' >> Dockerfile
+            echo 'RUN npm install' >> Dockerfile
+            echo 'COPY . .' >> Dockerfile
+            echo 'EXPOSE 3000' >> Dockerfile
+            echo 'CMD ["npm", "start"]' >> Dockerfile
           fi
+
 
       # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
       - name: Crear archivo deployment.yaml

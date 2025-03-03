@@ -34,13 +34,11 @@ jobs:
             echo 'FROM node:18-alpine' > Dockerfile
             echo 'WORKDIR /app' >> Dockerfile
             echo 'COPY package*.json ./' >> Dockerfile
-            echo 'RUN npm install' >> Dockerfile
+            echo 'RUN npm install --legacy-peer-deps' >> Dockerfile
             echo 'COPY . .' >> Dockerfile
             echo 'EXPOSE 3000' >> Dockerfile
             echo 'CMD ["npm", "start"]' >> Dockerfile
           fi
-
-
 
       # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
       - name: Crear archivo deployment.yaml

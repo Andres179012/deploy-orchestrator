@@ -32,10 +32,10 @@ jobs:
           rm -rf node_modules package-lock.json
           npm ci
 
-      - name: Instalar versión compatible de `@astrojs/node`
-        run: |
-          cd ${{ github.event.inputs.repo_name }}
-          npm install @astrojs/node@4 --save-dev
+          - name: Instalar versión compatible de `@astrojs/node`
+          run: |
+            cd ${{ github.event.inputs.repo_name }}
+            npm install @astrojs/node@4 --save-dev
 
       - name: Crear script para corregir astro.config.mjs
         run: |
@@ -69,6 +69,9 @@ jobs:
             adapter: node({
               mode: 'middleware',
             }),
+            image: {
+              endpoint: '_image', // Añade esta línea
+            },
           });
           \`;
 

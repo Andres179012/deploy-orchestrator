@@ -69,7 +69,7 @@ jobs:
                 echo "✅ Adaptador de Node.js agregado correctamente"
               fi
             fi
-
+            
             # 🔥 Corregir posibles errores de sintaxis
             if grep -q '  )});' astro.config.mjs; then
               echo "⚠️ Corrigiendo sintaxis en astro.config.mjs..."

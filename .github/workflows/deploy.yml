@@ -26,40 +26,36 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # 🔥 Instalar dependencias y asegurar versión compatible de `@astrojs/node`
-      - name: Instalar dependencias y `@astrojs/node`
+      # 🔥 Limpiar e instalar dependencias correctamente
+      - name: Limpiar y reinstalar dependencias
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          echo "🚀 Instalando todas las dependencias..."
+          rm -rf node_modules package-lock.json
           npm install --legacy-peer-deps
 
-          # Detectar la versión de Astro en package.json
+      # 🔥 Detectar la versión de Astro y asegurar la versión correcta de @astrojs/node
+      - name: Instalar versión compatible de `@astrojs/node`
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
           ASTRO_VERSION=$(node -p "require('./package.json').dependencies?.astro || require('./package.json').devDependencies?.astro || ''")
-          
-          # Si el proyecto usa Astro, instalar `@astrojs/node` con la versión compatible
+
           if [[ "$ASTRO_VERSION" =~ ^3 ]]; then
-            echo "🚀 Detectado Astro $ASTRO_VERSION, instalando @astrojs/node@4..."
             npm install @astrojs/node@4 --save-dev --legacy-peer-deps
           elif [[ "$ASTRO_VERSION" =~ ^4 ]]; then
-            echo "🚀 Detectado Astro $ASTRO_VERSION, instalando @astrojs/node@8..."
             npm install @astrojs/node@8 --save-dev --legacy-peer-deps
           elif [[ "$ASTRO_VERSION" =~ ^5 ]]; then
-            echo "🚀 Detectado Astro $ASTRO_VERSION, instalando @astrojs/node@9..."
             npm install @astrojs/node@9 --save-dev --legacy-peer-deps
           else
-            echo "⚠️ No se pudo detectar la versión de Astro, usando @astrojs/node más reciente"
             npm install @astrojs/node --save-dev --legacy-peer-deps
           fi
-          
-          echo "✅ Dependencias instaladas correctamente"
 
-             # 🔥 Crear script para corregir astro.config.mjs
+      # 🔥 Crear script para corregir astro.config.mjs
       - name: Crear script para corregir astro.config.mjs
         run: |
           cat <<EOF > fix-astro-config.js
           const fs = require('fs');
-
           const filePath = './astro.config.mjs';
+
           if (!fs.existsSync(filePath)) {
             console.log('❌ No se encontró astro.config.mjs');
             process.exit(0);
@@ -67,7 +63,6 @@ jobs:
 
           let content = fs.readFileSync(filePath, 'utf8');
 
-          // 🔥 1️⃣ Asegurar importaciones necesarias
           if (!content.includes("import { defineConfig } from 'astro/config';")) {
             content = "import { defineConfig } from 'astro/config';\n" + content;
           }
@@ -75,11 +70,9 @@ jobs:
             content = "import node from '@astrojs/node';\n" + content;
           }
 
-          // 🔥 2️⃣ Eliminar Netlify sin romper la sintaxis
           content = content.replace(/import netlify.*\n?/g, '');
           content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
 
-          // 🔥 3️⃣ Corregir o agregar configuración de Astro
           const astroConfig = \`
           import { defineConfig } from 'astro/config';
           import node from '@astrojs/node';
@@ -88,17 +81,16 @@ jobs:
             output: 'server',
             adapter: node({ mode: 'middleware' }),
             image: {
-              endpoint: 'astro/assets/endpoint/node',
+              service: {
+                entrypoint: 'astro/assets/services/squoosh',
+              },
             },
           });
           \`;
 
-          content = astroConfig.trim(); // Sobrescribe con la configuración correcta
-
-          fs.writeFileSync(filePath, content, 'utf8');
+          fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
           console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
-
 
       # 🔥 Ejecutar script de corrección antes del build
       - name: Corregir Astro antes del build
@@ -106,6 +98,13 @@ jobs:
           cd ${{ github.event.inputs.repo_name }}
           node ../fix-astro-config.js
 
+      # 🔥 Construir el proyecto Astro
+      - name: Build Astro project
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          npm run build
+
+      # 🔥 Crear Dockerfile asegurando build antes de ejecutar preview
       - name: Crear Dockerfile
         run: |
           cd ${{ github.event.inputs.repo_name }}
@@ -115,7 +114,7 @@ jobs:
           COPY package*.json ./  
           RUN npm install --legacy-peer-deps
           COPY . .
-          RUN npm run build || echo 'No se necesita build'
+          RUN npm run build
           EXPOSE 4321
           CMD ["sh", "-c", "npm run preview -- --host"]
           EOF

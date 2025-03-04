@@ -29,26 +29,51 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # 4️⃣ Crear un Dockerfile dinámicamente si no existe
-      - name: Crear Dockerfile dinámicamente
+            # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
+      - name: Detectar framework y crear Dockerfile dinámicamente
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          if [ ! -f "Dockerfile" ]; then
-            echo "FROM node:18-alpine" > Dockerfile
-            echo "WORKDIR /app" >> Dockerfile
-            echo "COPY package*.json ./" >> Dockerfile
-            echo "RUN npm install --legacy-peer-deps" >> Dockerfile
-            echo "COPY . ." >> Dockerfile
-            echo "EXPOSE 3000" >> Dockerfile
-            echo "CMD [\"npm\", \"run\", \"start\"]" >> Dockerfile
+
+          PORT=3000
+          START_CMD="npm run start"
+
+          # Detectar el framework según package.json
+          if grep -q '"vite"' package.json; then
+            PORT=4173
+            if grep -q '"preview"' package.json; then
+              START_CMD="npm run preview"
+            else
+              START_CMD="npm run dev"
+            fi
+          elif grep -q '"next"' package.json; then
+            START_CMD="npm run start"
+            PORT=3000
+          elif grep -q '"astro"' package.json; then
+            START_CMD="npm run preview"
+            PORT=4321
           fi
+
+          echo "Detectado framework con comando: $START_CMD y puerto: $PORT"
+
+          # Crear el Dockerfile usando echo línea por línea
+          echo "FROM node:18-alpine" > Dockerfile
+          echo "WORKDIR /app" >> Dockerfile
+          echo "COPY package*.json ./" >> Dockerfile
+          echo "RUN npm install --legacy-peer-deps" >> Dockerfile
+          echo "COPY . ." >> Dockerfile
+          echo "RUN npm run build || echo 'No se necesita build'" >> Dockerfile
+          echo "EXPOSE $PORT" >> Dockerfile
+          echo "CMD [\"sh\", \"-c\", \"$START_CMD\"]" >> Dockerfile
+
+          echo "PORT=$PORT" >> $GITHUB_ENV
+
 
       # 5️⃣ Crear el archivo k8s/deployment.yaml dinámicamente con nombres en minúsculas
       - name: Crear archivo deployment.yaml
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s
-          printf "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ${GITHUB_REPO_NAME}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: ${GITHUB_REPO_NAME}\n  template:\n    metadata:\n      labels:\n        app: ${GITHUB_REPO_NAME}\n    spec:\n      containers:\n        - name: ${GITHUB_REPO_NAME}\n          image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest\n          ports:\n            - containerPort: 3000\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: ${GITHUB_REPO_NAME}-service\nspec:\n  selector:\n    app: ${GITHUB_REPO_NAME}\n  ports:\n    - protocol: TCP\n      port: 80\n      targetPort: 3000\n  type: LoadBalancer\n" > k8s/deployment.yaml
+          printf "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ${GITHUB_REPO_NAME}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: ${GITHUB_REPO_NAME}\n  template:\n    metadata:\n      labels:\n        app: ${GITHUB_REPO_NAME}\n    spec:\n      containers:\n        - name: ${GITHUB_REPO_NAME}\n          image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest\n          ports:\n            - containerPort: ${PORT}\n          imagePullPolicy: Always\n          env:\n            - name: PORT\n              value: \"${PORT}\"\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: ${GITHUB_REPO_NAME}-service\nspec:\n  selector:\n    app: ${GITHUB_REPO_NAME}\n  ports:\n    - protocol: TCP\n      port: 80\n      targetPort: ${PORT}\n  type: LoadBalancer\n" > k8s/deployment.yaml
 
       # 6️⃣ Iniciar sesión en DigitalOcean
       - name: Iniciar sesión en DigitalOcean

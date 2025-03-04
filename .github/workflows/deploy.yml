@@ -15,21 +15,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout del repositorio centralizado
       - name: Checkout código del repositorio centralizado
         uses: actions/checkout@v4
 
-      # 2️⃣ Clonar el repositorio a desplegar
       - name: Clonar el repositorio a desplegar
         run: |
           git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
 
-      # 3️⃣ Definir variable de entorno en minúsculas
       - name: Definir variable de entorno en minúsculas
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
       - name: Detectar framework y configurar Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
@@ -38,42 +34,37 @@ jobs:
           START_CMD="npm run start"
 
           # Detectar el framework según package.json
-          if grep -q '"vite"' package.json; then
-            PORT=4173
-            START_CMD="npm run preview -- --host"
-          elif grep -q '"next"' package.json; then
-            PORT=3000
-            START_CMD="npm run start"
-          elif grep -q '"astro"' package.json; then
+          if grep -q '"astro"' package.json; then
             PORT=4321
             START_CMD="npm run preview -- --host"
 
-            # 🔥 1️⃣ Eliminar Netlify sin romper la sintaxis de Astro
+            # 🔥 1️⃣ Eliminar Netlify correctamente
             if grep -q '@astrojs/netlify' astro.config.mjs; then
               echo "🚀 Eliminando Netlify del archivo de configuración..."
               sed -i '/import netlify/d' astro.config.mjs
-              sed -i '/adapter: netlify(/, /)/d' astro.config.mjs
               sed -i '/adapter: netlify/d' astro.config.mjs
               echo "✅ Netlify eliminado correctamente"
             fi
 
-            # 🔥 2️⃣ Si `output: 'server'` está presente, asegurarse de que tenga un adaptador
-            if grep -q "output: 'server'" astro.config.mjs; then
-              if ! grep -q '@astrojs/node' astro.config.mjs; then
-                echo "🚀 Instalando adaptador de Node.js..."
-                npm install @astrojs/node --save-dev
+            # 🔥 2️⃣ Si output: 'server' está presente, asegurar adaptador Node.js
+            if grep -q "output: 'server'" astro.config.mjs && ! grep -q 'adapter:' astro.config.mjs; then
+              echo "🚀 Instalando y configurando el adaptador de Node.js..."
 
-                echo "🚀 Configurando adaptador de Node.js en Astro..."
+              # Asegurar que @astrojs/node está instalado
+              npm install @astrojs/node --save-dev
+
+              # Agregar import si falta
+              if ! grep -q '@astrojs/node' astro.config.mjs; then
                 sed -i '1 i\import node from "@astrojs/node";' astro.config.mjs
-                sed -i '/defineConfig({/a\  adapter: node(),' astro.config.mjs
-                echo "✅ Adaptador de Node.js agregado correctamente"
               fi
+
+              # Agregar adaptador dentro de defineConfig si no está
+              sed -i '/defineConfig({/a\  adapter: node(),' astro.config.mjs
+
+              echo "✅ Adaptador de Node.js configurado correctamente"
             fi
 
-            # 🔧 3️⃣ Revisar si queda una coma extra después de eliminar Netlify
-            sed -i ':a;N;$!ba;s/integrations: \[\([^]]*\),\s*\]/integrations: [\1]/' astro.config.mjs
-
-            # 🔥 4️⃣ Corregir posibles errores de sintaxis
+            # 🔧 3️⃣ Corregir sintaxis si quedó rota
             if grep -q '  )});' astro.config.mjs; then
               echo "⚠️ Corrigiendo sintaxis en astro.config.mjs..."
               sed -i 's/^  )});/  });/' astro.config.mjs
@@ -83,7 +74,7 @@ jobs:
 
           echo "🔍 Framework detectado: $START_CMD con puerto: $PORT"
 
-          # 🚀 5️⃣ Forzar instalación de dependencias antes del build
+          # 🚀 4️⃣ Forzar instalación de dependencias antes del build
           echo "🚀 Instalando todas las dependencias antes del build..."
           npm install --legacy-peer-deps
 
@@ -101,7 +92,6 @@ jobs:
 
           echo "PORT=$PORT" >> $GITHUB_ENV
 
-      # 5️⃣ Crear archivo deployment.yaml
       - name: Crear archivo deployment.yaml
         run: |
           cd ${{ github.event.inputs.repo_name }}
@@ -145,34 +135,28 @@ jobs:
             type: LoadBalancer
           EOF
 
-      # 6️⃣ Iniciar sesión en DigitalOcean
       - name: Iniciar sesión en DigitalOcean
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      # 7️⃣ Iniciar sesión en el Container Registry
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      # 8️⃣ Construir y subir imagen Docker
       - name: Construir y subir imagen Docker
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
           docker push registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
 
-      # 9️⃣ Configurar kubectl
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      # 🔟 Validar YAML antes de desplegar
       - name: Validar deployment.yaml
         run: |
           cd ${{ github.event.inputs.repo_name }}
           kubectl apply --dry-run=client -f k8s/deployment.yaml
 
-      # 1️⃣1️⃣ Desplegar en Kubernetes
       - name: Desplegar en Kubernetes
         run: |
           cd ${{ github.event.inputs.repo_name }}

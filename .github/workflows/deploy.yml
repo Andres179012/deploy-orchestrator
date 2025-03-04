@@ -53,7 +53,7 @@ jobs:
           
           echo "✅ Dependencias instaladas correctamente"
 
-                 # 🔥 Crear script para corregir astro.config.mjs
+             # 🔥 Crear script para corregir astro.config.mjs
       - name: Crear script para corregir astro.config.mjs
         run: |
           cat <<EOF > fix-astro-config.js
@@ -87,6 +87,12 @@ jobs:
           export default defineConfig({
             output: 'server',
             adapter: node({ mode: 'middleware' }),
+            image: {
+              endpoint: {
+                route: '_image',
+                entrypoint: 'astro/assets/endpoint/node',
+              },
+            },
           });
           \`;
 
@@ -95,6 +101,7 @@ jobs:
           fs.writeFileSync(filePath, content, 'utf8');
           console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
+
 
       # 🔥 Ejecutar script de corrección antes del build
       - name: Corregir Astro antes del build

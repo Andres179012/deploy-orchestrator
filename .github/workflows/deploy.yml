@@ -53,7 +53,7 @@ jobs:
           
           echo "✅ Dependencias instaladas correctamente"
 
-           # 🔥 Crear script para corregir astro.config.mjs
+                 # 🔥 Crear script para corregir astro.config.mjs
       - name: Crear script para corregir astro.config.mjs
         run: |
           cat <<EOF > fix-astro-config.js
@@ -80,19 +80,21 @@ jobs:
           content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
 
           // 🔥 3️⃣ Corregir o agregar configuración de Astro
-          const astroConfig = `
+          const astroConfig = \`
+          import { defineConfig } from 'astro/config';
+          import node from '@astrojs/node';
+
           export default defineConfig({
             output: 'server',
             adapter: node({ mode: 'middleware' }),
           });
-          `;
+          \`;
 
           content = astroConfig.trim(); // Sobrescribe con la configuración correcta
 
           fs.writeFileSync(filePath, content, 'utf8');
           console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
-
 
       # 🔥 Ejecutar script de corrección antes del build
       - name: Corregir Astro antes del build

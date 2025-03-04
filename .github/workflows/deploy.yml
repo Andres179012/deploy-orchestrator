@@ -48,14 +48,18 @@ jobs:
             PORT=4321
             START_CMD="npm run preview -- --host"
 
-            # 🔥 Eliminar Netlify si está presente en astro.config.mjs
-            # 🔥 Eliminar Netlify si está presente en astro.config.mjs
+            # 🔥 Eliminar Netlify sin romper la sintaxis de Astro
             if grep -q '@astrojs/netlify' astro.config.mjs; then
               echo "🚀 Eliminando Netlify del archivo de configuración..."
               sed -i '/import netlify/d' astro.config.mjs
+              sed -i '/adapter: netlify(/, /)/d' astro.config.mjs
               sed -i '/adapter: netlify/d' astro.config.mjs
               echo "✅ Netlify eliminado correctamente"
             fi
+
+            # 🔧 Revisar si queda una coma extra después de eliminar Netlify
+            sed -i ':a;N;$!ba;s/integrations: \[\([^]]*\),\s*\]/integrations: [\1]/' astro.config.mjs
+
 
             # 🔥 Corregir posibles errores de sintaxis
             if grep -q '  )});' astro.config.mjs; then

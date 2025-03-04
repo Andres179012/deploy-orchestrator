@@ -29,8 +29,7 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
-      # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
+     # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
       - name: Detectar framework y crear Dockerfile dinámicamente
         run: |
           cd ${{ github.event.inputs.repo_name }}
@@ -54,18 +53,22 @@ jobs:
             PORT=4321
 
             # 🔥 Reemplazar el adaptador de Netlify por Node si está presente
-            if grep -q '@astrojs/netlify' astro.config.*; then
-              echo "Detectado adaptador Netlify en Astro. Reemplazando con Node..."
-              sed -i 's/import netlify.*/import node from "@astrojs\/node";/' astro.config.*
-              sed -i 's/adapter: netlify.*/adapter: node(),/' astro.config.*
+            if grep -q '@astrojs/netlify' astro.config.mjs; then
+              echo "🚀 Detectado adaptador Netlify en Astro. Reemplazando con Node.js..."
+              sed -i 's/import netlify.*/import node from "@astrojs\/node";/' astro.config.mjs
+              sed -i 's/adapter: netlify.*/adapter: node(),/' astro.config.mjs
+              echo "✅ Adaptador cambiado a Node.js en astro.config.mjs"
             fi
 
-            # 🔥 Corregir posibles errores en astro.config.mjs
-            echo "Verificando sintaxis de astro.config.mjs..."
-            sed -i 's/^  )});/  });/' astro.config.*
+            # 🔥 Corregir posibles errores de sintaxis en astro.config.mjs
+            if grep -q '  )});' astro.config.mjs; then
+              echo "⚠️ Se detectó un posible error de sintaxis en astro.config.mjs. Corrigiéndolo..."
+              sed -i 's/^  )});/  });/' astro.config.mjs
+              echo "✅ Sintaxis corregida en astro.config.mjs"
+            fi
           fi
 
-          echo "Detectado framework con comando: $START_CMD y puerto: $PORT"
+          echo "🔍 Detectado framework con comando: $START_CMD y puerto: $PORT"
 
           # Crear el Dockerfile usando echo línea por línea
           echo "FROM node:18-alpine" > Dockerfile
@@ -78,6 +81,53 @@ jobs:
           echo "CMD [\"sh\", \"-c\", \"$START_CMD\"]" >> Dockerfile
 
           echo "PORT=$PORT" >> $GITHUB_ENV
+
+            run: |
+              cd ${{ github.event.inputs.repo_name }}
+
+              PORT=3000
+              START_CMD="npm run start"
+
+              # Detectar el framework según package.json
+              if grep -q '"vite"' package.json; then
+                PORT=4173
+                if grep -q '"preview"' package.json; then
+                  START_CMD="npm run preview -- --host"
+                else
+                  START_CMD="npm run dev -- --host"
+                fi
+              elif grep -q '"next"' package.json; then
+                START_CMD="npm run start"
+                PORT=3000
+              elif grep -q '"astro"' package.json; then
+                START_CMD="npm run preview -- --host"
+                PORT=4321
+
+                # 🔥 Reemplazar el adaptador de Netlify por Node si está presente
+                if grep -q '@astrojs/netlify' astro.config.*; then
+                  echo "Detectado adaptador Netlify en Astro. Reemplazando con Node..."
+                  sed -i 's/import netlify.*/import node from "@astrojs\/node";/' astro.config.*
+                  sed -i 's/adapter: netlify.*/adapter: node(),/' astro.config.*
+                fi
+
+                # 🔥 Corregir posibles errores en astro.config.mjs
+                echo "Verificando sintaxis de astro.config.mjs..."
+                sed -i 's/^  )});/  });/' astro.config.*
+              fi
+
+              echo "Detectado framework con comando: $START_CMD y puerto: $PORT"
+
+              # Crear el Dockerfile usando echo línea por línea
+              echo "FROM node:18-alpine" > Dockerfile
+              echo "WORKDIR /app" >> Dockerfile
+              echo "COPY package*.json ./" >> Dockerfile
+              echo "RUN npm install --legacy-peer-deps" >> Dockerfile
+              echo "COPY . ." >> Dockerfile
+              echo "RUN npm run build || echo 'No se necesita build'" >> Dockerfile
+              echo "EXPOSE $PORT" >> Dockerfile
+              echo "CMD [\"sh\", \"-c\", \"$START_CMD\"]" >> Dockerfile
+
+              echo "PORT=$PORT" >> $GITHUB_ENV
 
 
       # 5️⃣ Crear el archivo k8s/deployment.yaml dinámicamente con nombres en minúsculas

@@ -4,7 +4,7 @@ metadata:
   name: djhomeremodelersinc-seo-service
   namespace: default
 spec:
-  type: ClusterIP
+  type: ClusterIP  # 🔥 Cambiado de LoadBalancer a ClusterIP
   selector:
     app: djhomeremodelersinc-seo
   ports:

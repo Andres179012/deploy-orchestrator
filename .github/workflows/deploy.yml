@@ -49,13 +49,13 @@ jobs:
             START_CMD="npm run preview -- --host"
 
             # 🔥 Eliminar Netlify si está presente en astro.config.mjs
+            # 🔥 Eliminar Netlify si está presente en astro.config.mjs
             if grep -q '@astrojs/netlify' astro.config.mjs; then
               echo "🚀 Eliminando Netlify del archivo de configuración..."
               sed -i '/import netlify/d' astro.config.mjs
               sed -i '/adapter: netlify/d' astro.config.mjs
               echo "✅ Netlify eliminado correctamente"
             fi
-
 
             # 🔥 Corregir posibles errores de sintaxis
             if grep -q '  )});' astro.config.mjs; then

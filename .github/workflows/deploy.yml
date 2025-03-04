@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout del repositorio centralizado (deploy-orchestrator)
+      # 1️⃣ Checkout del repositorio centralizado
       - name: Checkout código del repositorio centralizado
         uses: actions/checkout@v4
 
@@ -23,87 +23,63 @@ jobs:
       - name: Clonar el repositorio a desplegar
         run: |
           git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
-          cd ${{ github.event.inputs.repo_name }}
 
-      # 3️⃣ Crear un Dockerfile dinámicamente si no existe
+      # 3️⃣ Definir variable de entorno
+      - name: Definir variable de entorno
+        run: echo "GITHUB_REPO_NAME=${{ github.event.inputs.repo_name }}" >> $GITHUB_ENV
+
+      # 4️⃣ Crear un Dockerfile dinámicamente si no existe
       - name: Crear Dockerfile dinámicamente
         run: |
           cd ${{ github.event.inputs.repo_name }}
           if [ ! -f "Dockerfile" ]; then
-            echo 'FROM node:18-alpine' > Dockerfile
-            echo 'WORKDIR /app' >> Dockerfile
-            echo 'COPY package*.json ./' >> Dockerfile
-            echo 'RUN npm install --legacy-peer-deps' >> Dockerfile
-            echo 'COPY . .' >> Dockerfile
-            echo 'EXPOSE 3000' >> Dockerfile
-            echo 'CMD ["npm", "start"]' >> Dockerfile
+            echo "FROM node:18-alpine" > Dockerfile
+            echo "WORKDIR /app" >> Dockerfile
+            echo "COPY package*.json ./" >> Dockerfile
+            echo "RUN npm install --legacy-peer-deps" >> Dockerfile
+            echo "COPY . ." >> Dockerfile
+            echo "EXPOSE 3000" >> Dockerfile
+            echo "CMD [\"npm\", \"run\", \"start\"]" >> Dockerfile
           fi
 
-      # 4️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
+      # 5️⃣ Crear el archivo k8s/deployment.yaml dinámicamente
       - name: Crear archivo deployment.yaml
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s
-          cat <<EOF > k8s/deployment.yaml
-              apiVersion: apps/v1
-              kind: Deployment
-              metadata:
-                name: ${{ github.event.inputs.repo_name }}
-              spec:
-                replicas: 1
-                selector:
-                  matchLabels:
-                    app: ${{ github.event.inputs.repo_name }}
-                template:
-                  metadata:
-                    labels:
-                      app: ${{ github.event.inputs.repo_name }}
-                  spec:
-                    containers:
-                      - name: ${{ github.event.inputs.repo_name }}
-                        image: registry.digitalocean.com/cosmly-registry/$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]'):latest
-                        ports:
-                          - containerPort: 3000
-              ---
-              apiVersion: v1
-              kind: Service
-              metadata:
-                name: ${{ github.event.inputs.repo_name }}-service
-              spec:
-                selector:
-                  app: ${{ github.event.inputs.repo_name }}
-                ports:
-                  - protocol: TCP
-                    port: 80
-                    targetPort: 3000
-                type: LoadBalancer
-              EOF
+          printf "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ${GITHUB_REPO_NAME}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: ${GITHUB_REPO_NAME}\n  template:\n    metadata:\n      labels:\n        app: ${GITHUB_REPO_NAME}\n    spec:\n      containers:\n        - name: ${GITHUB_REPO_NAME}\n          image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest\n          ports:\n            - containerPort: 3000\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: ${GITHUB_REPO_NAME}-service\nspec:\n  selector:\n    app: ${GITHUB_REPO_NAME}\n  ports:\n    - protocol: TCP\n      port: 80\n      targetPort: 3000\n  type: LoadBalancer\n" > k8s/deployment.yaml
 
-      # 5️⃣ Iniciar sesión en DigitalOcean
+      # 6️⃣ Iniciar sesión en DigitalOcean
       - name: Iniciar sesión en DigitalOcean
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      # 6️⃣ Iniciar sesión en el Container Registry de DigitalOcean
+      # 7️⃣ Iniciar sesión en el Container Registry de DigitalOcean
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      # 7️⃣ Construir y subir la imagen Docker
+      # 8️⃣ Construir y subir la imagen Docker
       - name: Construir y subir imagen Docker
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          REPO_NAME_LOWER=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')
+          REPO_NAME_LOWER=$(echo "${GITHUB_REPO_NAME}" | tr '[:upper:]' '[:lower:]')
           docker build -t registry.digitalocean.com/cosmly-registry/$REPO_NAME_LOWER:latest .
           docker push registry.digitalocean.com/cosmly-registry/$REPO_NAME_LOWER:latest
 
-      # 8️⃣ Configurar kubectl para acceder al clúster de Kubernetes
+      # 9️⃣ Configurar kubectl para acceder al clúster de Kubernetes
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      # 9️⃣ Desplegar en Kubernetes
+      # 🔟 Validar YAML antes de desplegar
+      - name: Validar deployment.yaml
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          kubectl apply --dry-run=client -f k8s/deployment.yaml
+
+      # 1️⃣1️⃣ Desplegar en Kubernetes
       - name: Desplegar en Kubernetes
         run: |
           cd ${{ github.event.inputs.repo_name }}
           kubectl apply -f k8s/deployment.yaml
-          kubectl rollout restart deployment/${{ github.event.inputs.repo_name }}
+          kubectl rollout restart deployment/${GITHUB_REPO_NAME}

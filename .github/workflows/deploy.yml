@@ -26,30 +26,17 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # 🔥 Limpiar e instalar dependencias correctamente
       - name: Limpiar y reinstalar dependencias
         run: |
           cd ${{ github.event.inputs.repo_name }}
           rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
+          npm ci
 
-      # 🔥 Detectar la versión de Astro y asegurar la versión correcta de @astrojs/node
       - name: Instalar versión compatible de `@astrojs/node`
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          ASTRO_VERSION=$(node -p "require('./package.json').dependencies?.astro || require('./package.json').devDependencies?.astro || ''")
+          npm install @astrojs/node@4 --save-dev
 
-          if [[ "$ASTRO_VERSION" =~ ^3 ]]; then
-            npm install @astrojs/node@4 --save-dev --legacy-peer-deps
-          elif [[ "$ASTRO_VERSION" =~ ^4 ]]; then
-            npm install @astrojs/node@8 --save-dev --legacy-peer-deps
-          elif [[ "$ASTRO_VERSION" =~ ^5 ]]; then
-            npm install @astrojs/node@9 --save-dev --legacy-peer-deps
-          else
-            npm install @astrojs/node --save-dev --legacy-peer-deps
-          fi
-
-      # 🔥 Crear script para corregir astro.config.mjs
       - name: Crear script para corregir astro.config.mjs
         run: |
           cat <<EOF > fix-astro-config.js
@@ -89,19 +76,16 @@ jobs:
           console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
 
-      # 🔥 Ejecutar script de corrección antes del build
       - name: Corregir Astro antes del build
         run: |
           cd ${{ github.event.inputs.repo_name }}
           node ../fix-astro-config.js
 
-      # 🔥 Construir el proyecto Astro
       - name: Build Astro project
         run: |
           cd ${{ github.event.inputs.repo_name }}
           npm run build
 
-      # 🔥 Crear Dockerfile asegurando build antes de ejecutar preview
       - name: Crear Dockerfile
         run: |
           cd ${{ github.event.inputs.repo_name }}
@@ -109,11 +93,11 @@ jobs:
           FROM node:18-alpine
           WORKDIR /app
           COPY package*.json ./  
-          RUN npm install --legacy-peer-deps
+          RUN npm ci
           COPY . .
           RUN npm run build
           EXPOSE 4321
-          CMD ["sh", "-c", "npm run preview -- --host"]
+          CMD ["npm", "run", "preview", "--", "--host"]
           EOF
 
       - name: Crear archivo deployment.yaml

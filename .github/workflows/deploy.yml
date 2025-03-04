@@ -36,7 +36,7 @@ jobs:
           # Si el proyecto usa Astro, instalar `@astrojs/node`
           if grep -q '"astro"' package.json; then
             echo "🚀 Instalando adaptador de Node.js para Astro..."
-            npm install @astrojs/node --save-dev
+            nnpm install @astrojs/node --save-dev --legacy-peer-deps
             echo "✅ Adaptador de Node.js instalado correctamente"
           fi
 

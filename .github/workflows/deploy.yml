@@ -84,10 +84,7 @@ jobs:
               service: {
                 entrypoint: 'astro/assets/services/node',
               },
-              endpoint: {
-                route: '_image',
-                entrypoint: 'astro/assets/endpoint/node'
-              }
+              endpoint: '_image'
             },
           });
           \`;

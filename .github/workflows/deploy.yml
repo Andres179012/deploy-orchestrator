@@ -29,7 +29,7 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-            # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
+      # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
       - name: Detectar framework y crear Dockerfile dinámicamente
         run: |
           cd ${{ github.event.inputs.repo_name }}
@@ -51,6 +51,13 @@ jobs:
           elif grep -q '"astro"' package.json; then
             START_CMD="npm run preview -- --host"
             PORT=4321
+
+            # 🔥 Reemplazar el adaptador de Netlify por Node si está presente
+            if grep -q '@astrojs/netlify' astro.config.*; then
+              echo "Detectado adaptador Netlify en Astro. Reemplazando con Node..."
+              sed -i 's/import netlify.*/import node from "@astrojs\/node";/' astro.config.*
+              sed -i 's/adapter: netlify.*/adapter: node(),/' astro.config.*
+            fi
           fi
 
           echo "Detectado framework con comando: $START_CMD y puerto: $PORT"
@@ -66,6 +73,7 @@ jobs:
           echo "CMD [\"sh\", \"-c\", \"$START_CMD\"]" >> Dockerfile
 
           echo "PORT=$PORT" >> $GITHUB_ENV
+
 
 
       # 5️⃣ Crear el archivo k8s/deployment.yaml dinámicamente con nombres en minúsculas

@@ -81,6 +81,7 @@ jobs:
             output: 'server',
             adapter: node({ mode: 'middleware' }),
             image: {
+              endpoint: '_image',
               service: {
                 entrypoint: 'astro/assets/services/squoosh',
               },
@@ -91,6 +92,7 @@ jobs:
           fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
           console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
+
 
       # 🔥 Ejecutar script de corrección antes del build
       - name: Corregir Astro antes del build

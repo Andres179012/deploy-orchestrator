@@ -57,16 +57,23 @@ jobs:
               echo "✅ Netlify eliminado correctamente"
             fi
 
+            # 🔥 Si `output: 'server'` está presente, asegurarse de que tenga un adaptador
+            if grep -q "output: 'server'" astro.config.mjs; then
+              if ! grep -q '@astrojs/node' astro.config.mjs; then
+                echo "🚀 Instalando adaptador de Node.js..."
+                npm install @astrojs/node --save-dev
+
+                echo "🚀 Configurando adaptador de Node.js en Astro..."
+                sed -i '1 i\import node from "@astrojs/node";' astro.config.mjs
+                sed -i '/defineConfig({/a\  adapter: node(),' astro.config.mjs
+                echo "✅ Adaptador de Node.js agregado correctamente"
+              fi
+            fi
+
             # 🔧 Revisar si queda una coma extra después de eliminar Netlify
             sed -i ':a;N;$!ba;s/integrations: \[\([^]]*\),\s*\]/integrations: [\1]/' astro.config.mjs
 
-            # 🔥 Si `output: 'server'` está presente pero no hay adaptador, cambiar a 'static'
-            if grep -q "output: 'server'" astro.config.mjs && ! grep -q 'adapter:' astro.config.mjs; then
-              echo "🚀 No hay adaptador, cambiando output a 'static'..."
-              sed -i "s/output: 'server'/output: 'static'/" astro.config.mjs
-              echo "✅ Output cambiado a static"
-            fi
-
+           
 
             # 🔥 Corregir posibles errores de sintaxis
             if grep -q '  )});' astro.config.mjs; then

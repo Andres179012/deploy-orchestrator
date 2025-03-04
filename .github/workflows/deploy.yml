@@ -30,13 +30,8 @@ jobs:
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
-      - name: Detectar framework y crear Dockerfile dinámicamente
+      - name: Detectar framework y configurar Astro
         run: |
-          if [ ! -d "${{ github.event.inputs.repo_name }}" ]; then
-            echo "❌ Error: El directorio del repositorio no existe."
-            exit 1
-          fi
-
           cd ${{ github.event.inputs.repo_name }}
 
           PORT=3000
@@ -53,23 +48,25 @@ jobs:
             PORT=4321
             START_CMD="npm run preview -- --host"
 
-            # 🔥 Eliminar Netlify si está presente
+            # 🔥 Eliminar Netlify si está presente y reemplazar con Node.js
             if grep -q '@astrojs/netlify' astro.config.mjs; then
-              echo "🚀 Eliminando adaptador Netlify de Astro..."
+              echo "🚀 Eliminando Netlify y configurando Node.js en Astro..."
               sed -i '/import netlify/d' astro.config.mjs
               sed -i '/adapter: netlify/d' astro.config.mjs
-              echo "✅ Adaptador Netlify eliminado correctamente"
+              sed -i '1 i\import node from "@astrojs/node";' astro.config.mjs
+              sed -i '/defineConfig({/a\  adapter: node(),' astro.config.mjs
+              echo "✅ Adaptador de Astro cambiado a Node.js"
             fi
 
-            # 🔥 Corregir posibles errores de sintaxis en astro.config.mjs
+            # 🔥 Corregir posibles errores de sintaxis
             if grep -q '  )});' astro.config.mjs; then
-              echo "⚠️ Corrigiendo error de sintaxis en astro.config.mjs..."
+              echo "⚠️ Corrigiendo sintaxis en astro.config.mjs..."
               sed -i 's/^  )});/  });/' astro.config.mjs
-              echo "✅ Sintaxis corregida en astro.config.mjs"
+              echo "✅ Sintaxis corregida"
             fi
           fi
 
-          echo "🔍 Detectado framework con comando: $START_CMD y puerto: $PORT"
+          echo "🔍 Framework detectado: $START_CMD con puerto: $PORT"
 
           # Crear Dockerfile
           cat <<EOF > Dockerfile

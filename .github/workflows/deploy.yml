@@ -53,7 +53,7 @@ jobs:
           
           echo "✅ Dependencias instaladas correctamente"
 
-     # 🔥 Crear script para corregir astro.config.mjs
+      # 🔥 Crear script para corregir astro.config.mjs
       - name: Crear script para corregir astro.config.mjs
         run: |
           cat <<EOF > fix-astro-config.js
@@ -76,8 +76,13 @@ jobs:
             content = "import node from '@astrojs/node';\n" + content;
           }
 
-          if (!content.includes("adapter: node({ mode: 'standalone' })")) {
-            content = content.replace(/defineConfig\(\{\s*/, "defineConfig({\n  adapter: node({ mode: 'standalone' }),\n");
+          if (!content.includes("adapter: node({ mode: 'middleware' })")) {
+            content = content.replace(/defineConfig\(\{\s*/, "defineConfig({\n  adapter: node({ mode: 'middleware' }),\n");
+          }
+
+          // 🔥 Agregar configuración de imágenes para evitar error "Cannot read properties of undefined (reading 'route')"
+          if (!content.includes("image: { endpoint: { route: '_image' } }")) {
+            content = content.replace(/defineConfig\(\{/, "defineConfig({\n  image: { endpoint: { route: '_image' } } },");
           }
 
           // 🔧 Arreglar posibles errores de sintaxis
@@ -86,7 +91,6 @@ jobs:
           fs.writeFileSync(filePath, content, 'utf8');
           console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
-
 
       # 🔥 Ejecutar script de corrección antes del build
       - name: Corregir Astro antes del build

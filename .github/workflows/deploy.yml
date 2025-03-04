@@ -26,6 +26,40 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
+      # 🔥 Crear script en Node.js para corregir astro.config.mjs
+      - name: Crear script para corregir astro.config.mjs
+        run: |
+          cat <<EOF > fix-astro-config.js
+          const fs = require('fs');
+
+          const filePath = './astro.config.mjs';
+          if (!fs.existsSync(filePath)) {
+            console.log('❌ No se encontró astro.config.mjs');
+            process.exit(0);
+          }
+
+          let content = fs.readFileSync(filePath, 'utf8');
+
+          // 🔥 Eliminar Netlify si está presente
+          content = content.replace(/import netlify.*\n?/g, '');
+          content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
+
+          // 🔥 Agregar el adaptador de Node.js si no está
+          if (!content.includes("import node from '@astrojs/node'")) {
+            content = "import node from '@astrojs/node';\n" + content;
+          }
+
+          if (!content.includes("adapter: node()")) {
+            content = content.replace(/defineConfig\(\{\s*/, "defineConfig({\n  adapter: node(),\n");
+          }
+
+          // 🔧 Arreglar posibles errores de sintaxis
+          content = content.replace(/\)\}\);/g, '});'); // Fix cierre incorrecto
+
+          fs.writeFileSync(filePath, content, 'utf8');
+          console.log('✅ astro.config.mjs actualizado correctamente');
+          EOF
+
       - name: Detectar framework y configurar Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
@@ -38,49 +72,13 @@ jobs:
             PORT=4321
             START_CMD="npm run preview -- --host"
 
-            # 🔥 1️⃣ Eliminar Netlify correctamente y evitar errores de sintaxis
-            if grep -q '@astrojs/netlify' astro.config.mjs; then
-              echo "🚀 Eliminando Netlify del archivo de configuración..."
-              sed -i '/import netlify/d' astro.config.mjs
-              sed -i '/adapter: netlify/d' astro.config.mjs
-              echo "✅ Netlify eliminado correctamente"
-            fi
-
-            # 🔥 2️⃣ Si output: 'server' está presente, asegurar adaptador Node.js
-            if grep -q "output: 'server'" astro.config.mjs; then
-              if ! grep -q '@astrojs/node' astro.config.mjs; then
-                echo "🚀 Instalando y configurando el adaptador de Node.js..."
-
-                # Instalar el adaptador si no existe
-                npm install @astrojs/node --save-dev
-
-                # Agregar import si no está presente
-                if ! grep -q 'import node from "@astrojs/node";' astro.config.mjs; then
-                  sed -i '1 i\import node from "@astrojs/node";' astro.config.mjs
-                fi
-
-                # Agregar adaptador dentro de defineConfig sin romper sintaxis
-                if ! grep -q 'adapter: node(),' astro.config.mjs; then
-                  sed -i '/defineConfig({/a\  adapter: node(),' astro.config.mjs
-                fi
-
-                echo "✅ Adaptador de Node.js configurado correctamente"
-              fi
-            fi
-
-            # 🔧 3️⃣ Validar y corregir `astro.config.mjs` antes del build
-            if node -e "require('./astro.config.mjs')" 2>/dev/null; then
-              echo "✅ Configuración de Astro es válida"
-            else
-              echo "❌ Error en astro.config.mjs, corrigiendo sintaxis..."
-              sed -i 's/)})/})/' astro.config.mjs  # Arreglar paréntesis rotos
-              echo "✅ Configuración corregida"
-            fi
+            # 🔥 Ejecutar script de Node.js para corregir astro.config.mjs
+            node ../fix-astro-config.js
           fi
 
           echo "🔍 Framework detectado: $START_CMD con puerto: $PORT"
 
-          # 🚀 4️⃣ Forzar instalación de dependencias antes del build
+          # 🚀 Forzar instalación de dependencias antes del build
           echo "🚀 Instalando todas las dependencias antes del build..."
           npm install --legacy-peer-deps
 

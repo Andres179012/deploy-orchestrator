@@ -26,7 +26,21 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # 🔥 Crear script en Node.js para corregir astro.config.mjs
+      # 🔥 Instalar dependencias y forzar instalación de `@astrojs/node`
+      - name: Instalar dependencias y `@astrojs/node`
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          echo "🚀 Instalando todas las dependencias..."
+          npm install --legacy-peer-deps
+          
+          # Si el proyecto usa Astro, instalar `@astrojs/node`
+          if grep -q '"astro"' package.json; then
+            echo "🚀 Instalando adaptador de Node.js para Astro..."
+            npm install @astrojs/node --save-dev
+            echo "✅ Adaptador de Node.js instalado correctamente"
+          fi
+
+      # 🔥 Crear script para corregir astro.config.mjs
       - name: Crear script para corregir astro.config.mjs
         run: |
           cat <<EOF > fix-astro-config.js
@@ -60,29 +74,15 @@ jobs:
           console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
 
-      - name: Detectar framework y configurar Astro
+      # 🔥 Ejecutar script de corrección antes del build
+      - name: Corregir Astro antes del build
         run: |
           cd ${{ github.event.inputs.repo_name }}
+          node ../fix-astro-config.js
 
-          PORT=3000
-          START_CMD="npm run start"
-
-          # Detectar el framework según package.json
-          if grep -q '"astro"' package.json; then
-            PORT=4321
-            START_CMD="npm run preview -- --host"
-
-            # 🔥 Ejecutar script de Node.js para corregir astro.config.mjs
-            node ../fix-astro-config.js
-          fi
-
-          echo "🔍 Framework detectado: $START_CMD con puerto: $PORT"
-
-          # 🚀 Forzar instalación de dependencias antes del build
-          echo "🚀 Instalando todas las dependencias antes del build..."
-          npm install --legacy-peer-deps
-
-          # Crear Dockerfile
+      - name: Crear Dockerfile
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
           cat <<EOF > Dockerfile
           FROM node:18-alpine
           WORKDIR /app
@@ -90,11 +90,9 @@ jobs:
           RUN npm install --legacy-peer-deps
           COPY . .
           RUN npm run build || echo 'No se necesita build'
-          EXPOSE $PORT
-          CMD ["sh", "-c", "$START_CMD"]
+          EXPOSE 4321
+          CMD ["sh", "-c", "npm run preview -- --host"]
           EOF
-
-          echo "PORT=$PORT" >> $GITHUB_ENV
 
       - name: Crear archivo deployment.yaml
         run: |
@@ -119,11 +117,11 @@ jobs:
                   - name: ${GITHUB_REPO_NAME}
                     image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
                     ports:
-                      - containerPort: ${PORT}
+                      - containerPort: 4321
                     imagePullPolicy: Always
                     env:
                       - name: PORT
-                        value: "${PORT}"
+                        value: "4321"
           --- 
           apiVersion: v1
           kind: Service
@@ -135,7 +133,7 @@ jobs:
             ports:
               - protocol: TCP
                 port: 80
-                targetPort: ${PORT}
+                targetPort: 4321
             type: LoadBalancer
           EOF
 

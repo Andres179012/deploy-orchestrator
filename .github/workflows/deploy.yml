@@ -26,19 +26,32 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      # 🔥 Instalar dependencias y forzar instalación de `@astrojs/node`
+      # 🔥 Instalar dependencias y asegurar versión compatible de `@astrojs/node`
       - name: Instalar dependencias y `@astrojs/node`
         run: |
           cd ${{ github.event.inputs.repo_name }}
           echo "🚀 Instalando todas las dependencias..."
           npm install --legacy-peer-deps
+
+          # Detectar la versión de Astro en package.json
+          ASTRO_VERSION=$(node -p "require('./package.json').dependencies?.astro || require('./package.json').devDependencies?.astro || ''")
           
-          # Si el proyecto usa Astro, instalar `@astrojs/node`
-          if grep -q '"astro"' package.json; then
-            echo "🚀 Instalando adaptador de Node.js para Astro..."
-            nnpm install @astrojs/node --save-dev --legacy-peer-deps
-            echo "✅ Adaptador de Node.js instalado correctamente"
+          # Si el proyecto usa Astro, instalar `@astrojs/node` con la versión compatible
+          if [[ "$ASTRO_VERSION" =~ ^3 ]]; then
+            echo "🚀 Detectado Astro $ASTRO_VERSION, instalando @astrojs/node@4..."
+            npm install @astrojs/node@4 --save-dev --legacy-peer-deps
+          elif [[ "$ASTRO_VERSION" =~ ^4 ]]; then
+            echo "🚀 Detectado Astro $ASTRO_VERSION, instalando @astrojs/node@8..."
+            npm install @astrojs/node@8 --save-dev --legacy-peer-deps
+          elif [[ "$ASTRO_VERSION" =~ ^5 ]]; then
+            echo "🚀 Detectado Astro $ASTRO_VERSION, instalando @astrojs/node@9..."
+            npm install @astrojs/node@9 --save-dev --legacy-peer-deps
+          else
+            echo "⚠️ No se pudo detectar la versión de Astro, usando @astrojs/node más reciente"
+            npm install @astrojs/node --save-dev --legacy-peer-deps
           fi
+          
+          echo "✅ Dependencias instaladas correctamente"
 
       # 🔥 Crear script para corregir astro.config.mjs
       - name: Crear script para corregir astro.config.mjs

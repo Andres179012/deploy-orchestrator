@@ -88,10 +88,7 @@ jobs:
             output: 'server',
             adapter: node({ mode: 'middleware' }),
             image: {
-              endpoint: {
-                route: '_image',
-                entrypoint: 'astro/assets/endpoint/node',
-              },
+              endpoint: 'astro/assets/endpoint/node',
             },
           });
           \`;

@@ -32,6 +32,11 @@ jobs:
      # 4️⃣ Detectar el framework y crear Dockerfile dinámicamente
       - name: Detectar framework y crear Dockerfile dinámicamente
         run: |
+          if [ ! -d "${{ github.event.inputs.repo_name }}" ]; then
+            echo "❌ Error: El directorio del repositorio no existe."
+            exit 1
+          fi
+
           cd ${{ github.event.inputs.repo_name }}
 
           PORT=3000
@@ -81,6 +86,7 @@ jobs:
           echo "CMD [\"sh\", \"-c\", \"$START_CMD\"]" >> Dockerfile
 
           echo "PORT=$PORT" >> $GITHUB_ENV
+
 
             run: |
               cd ${{ github.event.inputs.repo_name }}

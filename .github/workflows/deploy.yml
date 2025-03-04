@@ -69,6 +69,10 @@ jobs:
             adapter: node({
               mode: 'middleware',
             }),
+            server: {
+              host: true,  // 🔥 Asegura que escuche en 0.0.0.0
+              port: 4321
+            }
           });
           \`;
 

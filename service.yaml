@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: djhomeremodelersinc-seo-service
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: djhomeremodelersinc-seo
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 4321

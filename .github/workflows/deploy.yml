@@ -92,7 +92,12 @@ jobs:
             content = content.replace(/defineConfig\(\{\s*/, "defineConfig({\n  adapter: node({ mode: 'middleware' }),\n");
           }
 
-          // 🔧 6️⃣ Corregir errores de cierre de llaves `})`
+          // 🔥 6️⃣ Agregar configuración de imágenes para evitar error "Cannot read properties of undefined (reading 'route')"
+          if (!content.includes("image: { endpoint: { route: '_image' } }")) {
+            content = content.replace(/defineConfig\(\{/, "defineConfig({\n  image: { endpoint: { route: '_image' } } },");
+          }
+
+          // 🔧 7️⃣ Corregir errores de cierre de llaves `})`
           content = content.replace(/\)\}\);/g, '});');
 
           fs.writeFileSync(filePath, content, 'utf8');

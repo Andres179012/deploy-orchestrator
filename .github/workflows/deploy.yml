@@ -67,26 +67,33 @@ jobs:
 
           let content = fs.readFileSync(filePath, 'utf8');
 
-          // 🔥 Eliminar Netlify si está presente
+          // 🔥 1️⃣ Eliminar Netlify sin romper la sintaxis
           content = content.replace(/import netlify.*\n?/g, '');
           content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
 
-          // 🔥 Agregar el adaptador de Node.js si no está
+          // 🔥 2️⃣ Asegurar que la configuración base de Astro está bien definida
+          if (!content.includes("defineConfig")) {
+            console.log("❌ Error: No se encontró defineConfig en astro.config.mjs");
+            process.exit(1);
+          }
+
+          // 🔥 3️⃣ Agregar `import node from '@astrojs/node'` si falta
           if (!content.includes("import node from '@astrojs/node'")) {
             content = "import node from '@astrojs/node';\n" + content;
           }
 
+          // 🔥 4️⃣ Agregar `output: 'server'` si falta
+          if (!content.includes("output: 'server'")) {
+            content = content.replace(/defineConfig\(\{\s*/, "defineConfig({\n  output: 'server',\n");
+          }
+
+          // 🔥 5️⃣ Agregar el adaptador de Node.js correctamente
           if (!content.includes("adapter: node({ mode: 'middleware' })")) {
             content = content.replace(/defineConfig\(\{\s*/, "defineConfig({\n  adapter: node({ mode: 'middleware' }),\n");
           }
 
-          // 🔥 Agregar configuración de imágenes para evitar error "Cannot read properties of undefined (reading 'route')"
-          if (!content.includes("image: { endpoint: { route: '_image' } }")) {
-            content = content.replace(/defineConfig\(\{/, "defineConfig({\n  image: { endpoint: { route: '_image' } } },");
-          }
-
-          // 🔧 Arreglar posibles errores de sintaxis
-          content = content.replace(/\)\}\);/g, '});'); // Fix cierre incorrecto
+          // 🔧 6️⃣ Corregir errores de cierre de llaves `})`
+          content = content.replace(/\)\}\);/g, '});');
 
           fs.writeFileSync(filePath, content, 'utf8');
           console.log('✅ astro.config.mjs actualizado correctamente');

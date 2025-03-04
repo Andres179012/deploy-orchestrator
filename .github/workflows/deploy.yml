@@ -41,15 +41,15 @@ jobs:
           if grep -q '"vite"' package.json; then
             PORT=4173
             if grep -q '"preview"' package.json; then
-              START_CMD="npm run preview"
+              START_CMD="npm run preview -- --host"
             else
-              START_CMD="npm run dev"
+              START_CMD="npm run dev -- --host"
             fi
           elif grep -q '"next"' package.json; then
             START_CMD="npm run start"
             PORT=3000
           elif grep -q '"astro"' package.json; then
-            START_CMD="npm run preview"
+            START_CMD="npm run preview -- --host"
             PORT=4321
           fi
 

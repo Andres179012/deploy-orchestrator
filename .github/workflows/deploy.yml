@@ -79,13 +79,7 @@ jobs:
 
           export default defineConfig({
             output: 'server',
-            adapter: node({ mode: 'middleware' }),
-            image: {
-              service: {
-                entrypoint: 'astro/assets/services/node',
-              },
-              endpoint: '_image'
-            },
+            adapter: node({ mode: 'middleware' })
           });
           \`;
 

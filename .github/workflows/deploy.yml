@@ -84,6 +84,10 @@ jobs:
               service: {
                 entrypoint: 'astro/assets/services/node',
               },
+              endpoint: {
+                route: '_image',
+                entrypoint: 'astro/assets/endpoint/node'
+              }
             },
           });
           \`;
@@ -91,6 +95,7 @@ jobs:
           fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
           console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
+
       # 🔥 Ejecutar script de corrección antes del build
       - name: Corregir Astro antes del build
         run: |

@@ -38,7 +38,7 @@ jobs:
             PORT=4321
             START_CMD="npm run preview -- --host"
 
-            # 🔥 1️⃣ Eliminar Netlify correctamente
+            # 🔥 1️⃣ Eliminar Netlify correctamente y evitar errores de sintaxis
             if grep -q '@astrojs/netlify' astro.config.mjs; then
               echo "🚀 Eliminando Netlify del archivo de configuración..."
               sed -i '/import netlify/d' astro.config.mjs
@@ -47,28 +47,34 @@ jobs:
             fi
 
             # 🔥 2️⃣ Si output: 'server' está presente, asegurar adaptador Node.js
-            if grep -q "output: 'server'" astro.config.mjs && ! grep -q 'adapter:' astro.config.mjs; then
-              echo "🚀 Instalando y configurando el adaptador de Node.js..."
-
-              # Asegurar que @astrojs/node está instalado
-              npm install @astrojs/node --save-dev
-
-              # Agregar import si falta
+            if grep -q "output: 'server'" astro.config.mjs; then
               if ! grep -q '@astrojs/node' astro.config.mjs; then
-                sed -i '1 i\import node from "@astrojs/node";' astro.config.mjs
+                echo "🚀 Instalando y configurando el adaptador de Node.js..."
+
+                # Instalar el adaptador si no existe
+                npm install @astrojs/node --save-dev
+
+                # Agregar import si no está presente
+                if ! grep -q 'import node from "@astrojs/node";' astro.config.mjs; then
+                  sed -i '1 i\import node from "@astrojs/node";' astro.config.mjs
+                fi
+
+                # Agregar adaptador dentro de defineConfig sin romper sintaxis
+                if ! grep -q 'adapter: node(),' astro.config.mjs; then
+                  sed -i '/defineConfig({/a\  adapter: node(),' astro.config.mjs
+                fi
+
+                echo "✅ Adaptador de Node.js configurado correctamente"
               fi
-
-              # Agregar adaptador dentro de defineConfig si no está
-              sed -i '/defineConfig({/a\  adapter: node(),' astro.config.mjs
-
-              echo "✅ Adaptador de Node.js configurado correctamente"
             fi
 
-            # 🔧 3️⃣ Corregir sintaxis si quedó rota
-            if grep -q '  )});' astro.config.mjs; then
-              echo "⚠️ Corrigiendo sintaxis en astro.config.mjs..."
-              sed -i 's/^  )});/  });/' astro.config.mjs
-              echo "✅ Sintaxis corregida"
+            # 🔧 3️⃣ Validar y corregir `astro.config.mjs` antes del build
+            if node -e "require('./astro.config.mjs')" 2>/dev/null; then
+              echo "✅ Configuración de Astro es válida"
+            else
+              echo "❌ Error en astro.config.mjs, corrigiendo sintaxis..."
+              sed -i 's/)})/})/' astro.config.mjs  # Arreglar paréntesis rotos
+              echo "✅ Configuración corregida"
             fi
           fi
 

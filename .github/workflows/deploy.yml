@@ -73,62 +73,62 @@ jobs:
           esac
 
             - name: Configurar proyecto según tipo
-          run: |
-            cd ${{ github.event.inputs.repo_name }}
-            case $PROJECT_TYPE in
-              astro)
-                echo "Configurando proyecto Astro..."
-                npm install @astrojs/node@4 --save-dev --legacy-peer-deps
-                cat <<'EOF' > fix-astro-config.js
-                const fs = require('fs');
-                const filePath = './astro.config.mjs';
+              run: |
+                cd ${{ github.event.inputs.repo_name }}
+                case $PROJECT_TYPE in
+                  astro)
+                    echo "Configurando proyecto Astro..."
+                    npm install @astrojs/node@4 --save-dev --legacy-peer-deps
+                    cat <<'EOF' > fix-astro-config.js
+                    const fs = require('fs');
+                    const filePath = './astro.config.mjs';
 
-                if (!fs.existsSync(filePath)) {
-                  console.log('❌ No se encontró astro.config.mjs');
-                  process.exit(0);
-                }
+                    if (!fs.existsSync(filePath)) {
+                      console.log('❌ No se encontró astro.config.mjs');
+                      process.exit(0);
+                    }
 
-                let content = fs.readFileSync(filePath, 'utf8');
+                    let content = fs.readFileSync(filePath, 'utf8');
 
-                if (!content.includes("import { defineConfig } from 'astro/config';")) {
-                  content = "import { defineConfig } from 'astro/config';\n" + content;
-                }
-                if (!content.includes("import node from '@astrojs/node';")) {
-                  content = "import node from '@astrojs/node';\n" + content;
-                }
+                    if (!content.includes("import { defineConfig } from 'astro/config';")) {
+                      content = "import { defineConfig } from 'astro/config';\n" + content;
+                    }
+                    if (!content.includes("import node from '@astrojs/node';")) {
+                      content = "import node from '@astrojs/node';\n" + content;
+                    }
 
-                content = content.replace(/import netlify.*\n?/g, '');
-                content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
+                    content = content.replace(/import netlify.*\n?/g, '');
+                    content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
 
-                const astroConfig = \`
-                import { defineConfig } from 'astro/config';
-                import node from '@astrojs/node';
+                    const astroConfig = \`
+                    import { defineConfig } from 'astro/config';
+                    import node from '@astrojs/node';
 
-                export default defineConfig({
-                  output: 'server',
-                  adapter: node({
-                    mode: 'middleware',
-                  }),
-                  server: {
-                    host: true,
-                    port: 4321
-                  }
-                });
-                \`;
+                    export default defineConfig({
+                      output: 'server',
+                      adapter: node({
+                        mode: 'middleware',
+                      }),
+                      server: {
+                        host: true,
+                        port: 4321
+                      }
+                    });
+                    \`;
 
-                fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
-                console.log('✅ astro.config.mjs actualizado correctamente');
-                EOF
-                node fix-astro-config.js
-                ;;
-              next|react|angular|flask)
-                echo "No se requiere configuración adicional para $PROJECT_TYPE"
-                ;;
-              *)
-                echo "Tipo de proyecto no compatible"
-                exit 1
-                ;;
-            esac
+                    fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
+                    console.log('✅ astro.config.mjs actualizado correctamente');
+                    EOF
+                    node fix-astro-config.js
+                    ;;
+                  next|react|angular|flask)
+                    echo "No se requiere configuración adicional para $PROJECT_TYPE"
+                    ;;
+                  *)
+                    echo "Tipo de proyecto no compatible"
+                    exit 1
+                    ;;
+                esac
 
       - name: Build del proyecto
         run: |

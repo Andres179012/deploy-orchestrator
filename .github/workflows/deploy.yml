@@ -58,14 +58,17 @@ jobs:
           # Eliminar dependencias existentes
           rm -rf node_modules
 
+          # Eliminar adaptador de Netlify
+          npm uninstall @astrojs/netlify || true
+
+          # Instalar adaptador de Node.js
+          npm install @astrojs/node@latest --save-dev --legacy-peer-deps
+
+          # Instalar otras dependencias necesarias
+          npm install @astrojs/tailwind@latest --save-dev --legacy-peer-deps
+
           # Intentar instalación limpia, fallback a instalación normal si falla
           npm ci --legacy-peer-deps || npm install --legacy-peer-deps
-
-          # Eliminar adaptadores obsoletos (solo si existen)
-          npm uninstall @astrojs/netlify @astrojs/mdx || true
-
-          # Instalar adaptador de Node.js y Tailwind
-          npm install @astrojs/node@latest @astrojs/tailwind@latest --save-dev --legacy-peer-deps
 
           echo "✅ Dependencias de Astro actualizadas correctamente"
 
@@ -75,8 +78,13 @@ jobs:
           cat > astro.config.mjs <<EOF
           import { defineConfig } from 'astro/config';
           import node from '@astrojs/node';
+          import mdx from '@astrojs/mdx';
+          import sitemap from '@astrojs/sitemap';
+          import tailwind from "@astrojs/tailwind";
+          import react from "@astrojs/react";
 
           export default defineConfig({
+            integrations: [tailwind(), mdx(), sitemap(), react()],
             output: 'server',
             adapter: node({
               mode: 'standalone'

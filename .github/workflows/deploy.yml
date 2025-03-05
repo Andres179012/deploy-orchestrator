@@ -1,4 +1,4 @@
-name: Deploy Any Repository
+name: Deploy Astro Project
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout código del repositorio centralizado
         uses: actions/checkout@v4
 
-      - name: Clonar el repositorio a desplegar
+      - name: Clonar el repositorio Astro
         run: |
           git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
 
@@ -26,153 +26,76 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Detectar tipo de proyecto
-        id: detect-project
+      - name: Instalar dependencias en Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          if [ -f "package.json" ]; then
-            if grep -q '"astro"' package.json; then
-              echo "PROJECT_TYPE=astro" >> $GITHUB_ENV
-            elif grep -q '"next"' package.json; then
-              echo "PROJECT_TYPE=next" >> $GITHUB_ENV
-            elif grep -q '"react-scripts"' package.json; then
-              echo "PROJECT_TYPE=react" >> $GITHUB_ENV
-            elif grep -q '"@angular/core"' package.json; then
-              echo "PROJECT_TYPE=angular" >> $GITHUB_ENV
-            else
-              echo "No se detectó un framework compatible en package.json"
-              exit 1
-            fi
-          elif [ -f "requirements.txt" ]; then
-            echo "PROJECT_TYPE=flask" >> $GITHUB_ENV
-          else
-            echo "No se encontró un tipo de proyecto compatible"
-            exit 1
-          fi
+          rm -rf node_modules package-lock.json
+          npm install --legacy-peer-deps
 
-      - name: Limpiar y reinstalar dependencias
+      - name: Configurar Astro para Node.js
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          case $PROJECT_TYPE in
-            astro|next|react|angular)
-              rm -rf node_modules package-lock.json
-              npm install --legacy-peer-deps
-              ;;
-            flask)
-              pip install -r requirements.txt
-              ;;
-            *)
-              echo "Tipo de proyecto no compatible"
-              exit 1
-              ;;
-          esac
+          npm install @astrojs/node@4 --save-dev --legacy-peer-deps
+          cat > fix-astro-config.js <<EOF
+          const fs = require('fs');
+          const filePath = './astro.config.mjs';
 
-      - name: Configurar proyecto según tipo
-        run: |
-          cd ${{ github.event.inputs.repo_name }}
-          if [[ "$PROJECT_TYPE" == "astro" ]]; then
-            npm install @astrojs/node@4 --save-dev --legacy-peer-deps
-            cat > fix-astro-config.js <<EOF
-            const fs = require('fs');
-            const filePath = './astro.config.mjs';
+          if (!fs.existsSync(filePath)) {
+            console.log('❌ No se encontró astro.config.mjs');
+            process.exit(0);
+          }
 
-            if (!fs.existsSync(filePath)) {
-              console.log('❌ No se encontró astro.config.mjs');
-              process.exit(0);
+          let content = fs.readFileSync(filePath, 'utf8');
+
+          if (!content.includes("import { defineConfig } from 'astro/config';")) {
+            content = "import { defineConfig } from 'astro/config';\n" + content;
+          }
+          if (!content.includes("import node from '@astrojs/node';")) {
+            content = "import node from '@astrojs/node';\n" + content;
+          }
+
+          content = content.replace(/import netlify.*\n?/g, '');
+          content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
+
+          const astroConfig = \`
+          import { defineConfig } from 'astro/config';
+          import node from '@astrojs/node';
+
+          export default defineConfig({
+            output: 'server',
+            adapter: node({
+              mode: 'middleware',
+            }),
+            server: {
+              host: true,
+              port: 4321
             }
+          });
+          \`;
 
-            let content = fs.readFileSync(filePath, 'utf8');
+          fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
+          console.log('✅ astro.config.mjs actualizado correctamente');
+          EOF
+          node fix-astro-config.js
 
-            if (!content.includes("import { defineConfig } from 'astro/config';")) {
-              content = "import { defineConfig } from 'astro/config';\n" + content;
-            }
-            if (!content.includes("import node from '@astrojs/node';")) {
-              content = "import node from '@astrojs/node';\n" + content;
-            }
-
-            content = content.replace(/import netlify.*\n?/g, '');
-            content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
-
-            const astroConfig = \`
-            import { defineConfig } from 'astro/config';
-            import node from '@astrojs/node';
-
-            export default defineConfig({
-              output: 'server',
-              adapter: node({
-                mode: 'middleware',
-              }),
-              server: {
-                host: true,
-                port: 4321
-              }
-            });
-            \`;
-
-            fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
-            console.log('✅ astro.config.mjs actualizado correctamente');
-            EOF
-            node fix-astro-config.js
-          fi
-
-      - name: Build del proyecto
+      - name: Build del proyecto Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          case $PROJECT_TYPE in
-            astro|next|react)
-              npm run build
-              ;;
-            angular)
-              npm run build -- --prod
-              ;;
-            flask)
-              echo "No se requiere build para Flask"
-              ;;
-            *)
-              echo "Tipo de proyecto no compatible"
-              exit 1
-              ;;
-          esac
+          npm run build
 
-      - name: Crear Dockerfile
+      - name: Crear Dockerfile para Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          case $PROJECT_TYPE in
-            astro)
-              cat > Dockerfile <<EOF
-              FROM node:18-alpine
-              WORKDIR /app
-              COPY package*.json ./
-              RUN npm install --legacy-peer-deps
-              COPY . .
-              RUN npm run build
-              EXPOSE 4321
-              CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
-              EOF
-              ;;
-            next|react|angular)
-              cat > Dockerfile <<EOF
-              FROM node:18-alpine
-              WORKDIR /app
-              COPY package*.json ./
-              RUN npm install --legacy-peer-deps
-              COPY . .
-              RUN npm run build
-              EXPOSE 3000
-              CMD ["npm", "start"]
-              EOF
-              ;;
-            flask)
-              cat > Dockerfile <<EOF
-              FROM python:3.9-slim
-              WORKDIR /app
-              COPY requirements.txt .
-              RUN pip install -r requirements.txt
-              COPY . .
-              CMD ["python", "app.py"]
-              EOF
-              ;;
-          esac
+          cat > Dockerfile <<EOF
+          FROM node:18-alpine
+          WORKDIR /app
+          COPY package*.json ./
+          RUN npm install --legacy-peer-deps
+          COPY . .
+          RUN npm run build
+          EXPOSE 4321
+          CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
+          EOF
 
       - name: Iniciar sesión en DigitalOcean
         uses: digitalocean/action-doctl@v2
@@ -182,7 +105,7 @@ jobs:
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      - name: Construir y subir imagen Docker
+      - name: Construir y subir imagen Docker para Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
@@ -190,6 +113,51 @@ jobs:
 
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
+
+      - name: Crear archivo deployment.yaml para Astro
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          mkdir -p k8s
+          cat > k8s/deployment.yaml <<EOF
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${GITHUB_REPO_NAME}
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: ${GITHUB_REPO_NAME}
+            template:
+              metadata:
+                labels:
+                  app: ${GITHUB_REPO_NAME}
+              spec:
+                containers:
+                  - name: ${GITHUB_REPO_NAME}
+                    image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
+                    ports:
+                      - containerPort: 4321
+                    imagePullPolicy: Always
+                    env:
+                      - name: PORT
+                        value: "4321"
+                      - name: HOST
+                        value: "0.0.0.0"
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${GITHUB_REPO_NAME}-service
+          spec:
+            selector:
+              app: ${GITHUB_REPO_NAME}
+            ports:
+              - protocol: TCP
+                port: 80
+                targetPort: 4321
+            type: LoadBalancer
+          EOF
 
       - name: Validar deployment.yaml
         run: |

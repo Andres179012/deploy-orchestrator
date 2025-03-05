@@ -35,27 +35,29 @@ jobs:
             exit 1
           fi
 
-      - name: Instalar Bun (en lugar de Node.js)
-        uses: oven-sh/setup-bun@v1
+      - name: Instalar Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
 
       - name: Limpiar y actualizar dependencias de Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
 
           # Eliminar dependencias existentes
-          rm -rf node_modules bun.lockb
+          rm -rf node_modules package-lock.json bun.lockb
 
-          # Instalar dependencias con Bun
-          bun install --frozen-lockfile
+          # Instalar dependencias sin Node.js
+          deno cache src/entry.mjs
 
           echo "✅ Dependencias de Astro actualizadas correctamente"
 
-      - name: Configurar Astro para Cloudflare Workers
+      - name: Configurar Astro para Deno
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > astro.config.mjs <<EOF
           import { defineConfig } from 'astro/config';
-          import cloudflare from '@astrojs/cloudflare';
+          import deno from '@astrojs/deno';
           import mdx from '@astrojs/mdx';
           import sitemap from '@astrojs/sitemap';
           import tailwind from "@astrojs/tailwind";
@@ -63,7 +65,7 @@ jobs:
 
           export default defineConfig({
             output: 'server',
-            adapter: cloudflare(),
+            adapter: deno(),
             integrations: [tailwind(), mdx(), sitemap(), react()]
           });
           EOF
@@ -72,24 +74,23 @@ jobs:
       - name: Build del proyecto Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          bun run build
+          deno run -A npm:astro build
 
-      - name: Crear Dockerfile para Astro en Cloudflare
+      - name: Crear Dockerfile para Astro con Deno
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
-          FROM node:20-alpine
+          FROM denoland/deno:alpine
 
           WORKDIR /app
 
           COPY . .
 
-          RUN npm install -g wrangler
-          RUN wrangler publish --env production
+          RUN deno cache dist/server/entry.mjs
 
-          EXPOSE 80
+          EXPOSE 4321
 
-          CMD ["wrangler", "dev"]
+          CMD ["deno", "run", "--allow-net", "--allow-read", "dist/server/entry.mjs"]
           EOF
 
       - name: Verificar instalación de doctl
@@ -108,7 +109,7 @@ jobs:
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      - name: Construir y subir imagen Docker para Astro en Cloudflare
+      - name: Construir y subir imagen Docker para Astro con Deno
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
@@ -117,7 +118,7 @@ jobs:
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      - name: Crear archivo deployment.yaml para Astro en Cloudflare
+      - name: Crear archivo deployment.yaml para Astro con Deno
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s
@@ -140,7 +141,7 @@ jobs:
                   - name: ${GITHUB_REPO_NAME}
                     image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
                     ports:
-                      - containerPort: 80
+                      - containerPort: 4321
                     imagePullPolicy: Always
           ---
           apiVersion: v1
@@ -153,7 +154,7 @@ jobs:
             ports:
               - protocol: TCP
                 port: 80
-                targetPort: 80
+                targetPort: 4321
             type: LoadBalancer
           EOF
 

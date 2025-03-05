@@ -65,7 +65,7 @@ jobs:
             astro)
               echo "Configurando proyecto Astro..."
               npm install @astrojs/node@4 --save-dev --legacy-peer-deps
-              cat <<EOF > fix-astro-config.js
+              cat <<'EOF' > fix-astro-config.js
               const fs = require('fs');
               const filePath = './astro.config.mjs';
 
@@ -149,7 +149,7 @@ jobs:
           cd ${{ github.event.inputs.repo_name }}
           case $PROJECT_TYPE in
             astro)
-              cat <<EOF > Dockerfile
+              cat <<'EOF' > Dockerfile
               FROM node:18-alpine
               WORKDIR /app
               COPY package*.json ./  
@@ -161,7 +161,7 @@ jobs:
               EOF
               ;;
             next)
-              cat <<EOF > Dockerfile
+              cat <<'EOF' > Dockerfile
               FROM node:18-alpine
               WORKDIR /app
               COPY package*.json ./  
@@ -173,7 +173,7 @@ jobs:
               EOF
               ;;
             react)
-              cat <<EOF > Dockerfile
+              cat <<'EOF' > Dockerfile
               FROM node:18-alpine
               WORKDIR /app
               COPY package*.json ./  
@@ -185,7 +185,7 @@ jobs:
               EOF
               ;;
             angular)
-              cat <<EOF > Dockerfile
+              cat <<'EOF' > Dockerfile
               FROM node:18-alpine
               WORKDIR /app
               COPY package*.json ./  
@@ -224,7 +224,7 @@ jobs:
               exit 1
               ;;
           esac
-          cat <<EOF > k8s/deployment.yaml
+          cat <<'EOF' > k8s/deployment.yaml
           apiVersion: apps/v1
           kind: Deployment
           metadata:

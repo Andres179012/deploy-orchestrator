@@ -28,8 +28,8 @@ jobs:
 
       - name: Verificar estructura del directorio
         run: |
-          echo "📂 Estructura del directorio después del checkout:"
-          ls -la ${{ github.workspace }}
+          echo "📂 Mostrando estructura del directorio después del checkout:"
+          ls -la ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
 
       - name: Verificar existencia de package.json y package-lock.json
         run: |
@@ -52,6 +52,8 @@ jobs:
       - name: Instalar dependencias
         run: |
           cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
+          echo "📂 Mostrando archivos antes de instalar dependencias:"
+          ls -la
           npm ci || npm install
           echo "✅ Dependencias instaladas correctamente"
 

@@ -27,39 +27,41 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
+      - name: Verificar existencia de package.json
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          if [ ! -f package.json ]; then
+            echo "❌ Error: No se encontró package.json en el repositorio."
+            exit 1
+          fi
+
       - name: Establecer versión de Node.js compatible con Astro 5
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: 'npm'
 
-      - name: Verificar existencia de package-lock.json
+      - name: Generar package-lock.json si no existe
         run: |
           cd ${{ github.event.inputs.repo_name }}
           if [ ! -f package-lock.json ]; then
             echo "⚠️ package-lock.json no encontrado, generando uno nuevo..."
             npm install --package-lock-only --no-audit --no-fund
           else
-            echo "✅ package-lock.json encontrado."
+            echo "✅ package-lock.json ya existe."
           fi
 
       - name: Limpiar y actualizar dependencias de Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
 
-          # Eliminar node_modules si existe
+          # Eliminar dependencias existentes
           rm -rf node_modules
 
-          # Si hay package-lock.json, usamos npm ci, de lo contrario npm install
-          if [ -f package-lock.json ]; then
-            echo "📦 Instalando dependencias con npm ci..."
-            npm ci --legacy-peer-deps
-          else
-            echo "📦 Instalando dependencias con npm install..."
-            npm install --legacy-peer-deps
-          fi
+          # Intentar instalación limpia, fallback a instalación normal si falla
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
-          # Eliminar adaptadores obsoletos (si existen)
+          # Eliminar adaptadores obsoletos (solo si existen)
           npm uninstall @astrojs/netlify @astrojs/mdx || true
 
           # Instalar adaptador de Node.js y Tailwind

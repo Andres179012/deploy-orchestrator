@@ -27,6 +27,14 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
+      - name: Verificar existencia de package.json
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          if [ ! -f package.json ]; then
+            echo "❌ Error: No se encontró package.json en el repositorio."
+            exit 1
+          fi
+
       - name: Establecer versión de Node.js compatible con Astro 5
         uses: actions/setup-node@v4
         with:

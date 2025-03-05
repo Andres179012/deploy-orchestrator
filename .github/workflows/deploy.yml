@@ -31,7 +31,10 @@ jobs:
         run: |
           cd ${{ github.event.inputs.repo_name }}
           rm -rf node_modules package-lock.json
-          npm install astro@latest @astrojs/node@latest --save-dev --legacy-peer-deps
+          npm install --legacy-peer-deps
+          npm uninstall @astrojs/netlify
+          npm install @astrojs/node@latest --save-dev
+
 
       - name: Configurar Astro para Node.js
         run: |
@@ -63,14 +66,29 @@ jobs:
           cd ${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
           FROM node:20-alpine
+
+          # Configuración del directorio de trabajo
           WORKDIR /app
+
+          # Copiar package.json y package-lock.json primero
           COPY package*.json ./
-          RUN npm install --legacy-peer-deps
+
+          # Usar npm ci si hay package-lock.json, sino fallback a npm install
+          RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
+
+          # Copiar el resto del código fuente
           COPY . .
+
+          # Construir el proyecto Astro
           RUN npm run build
+
+          # Exponer el puerto correcto
           EXPOSE 4321
+
+          # Comando de inicio
           CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
           EOF
+
 
       - name: Iniciar sesión en DigitalOcean
         uses: digitalocean/action-doctl@v2
@@ -144,3 +162,9 @@ jobs:
           cd ${{ github.event.inputs.repo_name }}
           kubectl apply -f k8s/deployment.yaml
           kubectl rollout restart deployment/${GITHUB_REPO_NAME}
+
+      - name: Verificar estado del deployment en Kubernetes
+        run: |
+          sleep 10
+          kubectl get pods -l app=${GITHUB_REPO_NAME}
+

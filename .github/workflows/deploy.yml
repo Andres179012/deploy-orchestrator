@@ -35,25 +35,21 @@ jobs:
             exit 1
           fi
 
-      - name: Instalar Node.js
-        uses: actions/setup-node@v4
+      - name: Instalar Deno
+        uses: denoland/setup-deno@v1
         with:
-          node-version: 20
-          cache: 'npm'
+          deno-version: v1.x
 
-      - name: Limpiar y actualizar dependencias de Astro
+      - name: Limpiar y actualizar dependencias de Astro sin Node.js
         run: |
           cd ${{ github.event.inputs.repo_name }}
 
-          # Eliminar dependencias existentes
+          # Eliminar dependencias de Node.js
           rm -rf node_modules package-lock.json
-
-          # Instalar dependencias sin Netlify
-          npm install
 
           echo "✅ Dependencias de Astro actualizadas correctamente"
 
-      - name: Configurar Astro sin adaptador
+      - name: Configurar Astro sin adaptador ni Node.js
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > astro.config.mjs <<EOF
@@ -68,32 +64,28 @@ jobs:
             integrations: [tailwind(), mdx(), sitemap(), react()]
           });
           EOF
-          echo "✅ Configuración de Astro actualizada correctamente"
+          echo "✅ Configuración de Astro sin adaptador ni Node.js actualizada correctamente"
 
       - name: Build del proyecto Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          npm run build
+          deno run -A npm:astro build
 
-      - name: Crear Dockerfile para Astro sin adaptador
+      - name: Crear Dockerfile para Astro sin Node.js
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
-          FROM node:20-alpine
+          FROM denoland/deno:alpine
 
           WORKDIR /app
 
-          COPY package*.json ./
-
-          RUN npm install --omit=dev
-
           COPY . .
 
-          RUN npm run build
+          RUN deno cache dist/server/entry.mjs
 
           EXPOSE 4321
 
-          CMD ["npx", "astro", "preview", "--port", "4321", "--host"]
+          CMD ["deno", "run", "--allow-net", "--allow-read", "dist/server/entry.mjs"]
           EOF
 
       - name: Verificar instalación de doctl
@@ -112,7 +104,7 @@ jobs:
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      - name: Construir y subir imagen Docker para Astro sin adaptador
+      - name: Construir y subir imagen Docker para Astro sin Node.js
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
@@ -121,7 +113,7 @@ jobs:
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      - name: Crear archivo deployment.yaml para Astro sin adaptador
+      - name: Crear archivo deployment.yaml para Astro sin Node.js
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s

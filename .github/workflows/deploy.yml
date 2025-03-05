@@ -36,8 +36,6 @@ jobs:
       - name: Verificar y regenerar package-lock.json si no existe
         run: |
           cd ${{ github.event.inputs.repo_name }}
-
-          # Si no existe package-lock.json, lo generamos
           if [ ! -f package-lock.json ]; then
             echo "⚠️ package-lock.json no encontrado, generando uno nuevo..."
             npm install --package-lock-only --no-audit --no-fund
@@ -50,14 +48,14 @@ jobs:
           # Eliminar dependencias existentes
           rm -rf node_modules
 
-          # Instalar dependencias sin modificar package-lock.json
+          # Intentar instalación limpia, fallback a instalación normal si falla
           npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
-          # Eliminar adaptadores obsoletos
+          # Eliminar adaptadores obsoletos (solo si existen)
           npm uninstall @astrojs/netlify @astrojs/mdx || true
 
-          # Instalar adaptador de Node.js y otras integraciones compatibles
-          npm install @astrojs/node@latest @astrojs/tailwind@latest --save-dev --force
+          # Instalar adaptador de Node.js y Tailwind
+          npm install @astrojs/node@latest @astrojs/tailwind@latest --save-dev --legacy-peer-deps
 
           echo "✅ Dependencias de Astro actualizadas correctamente"
 

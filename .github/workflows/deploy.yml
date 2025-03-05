@@ -44,19 +44,33 @@ jobs:
               echo "Proyecto detectado: Angular"
               echo "PROJECT_TYPE=angular" >> $GITHUB_ENV
             else
-              echo "Proyecto no compatible detectado"
+              echo "Proyecto Node.js no compatible detectado"
               exit 1
             fi
+          elif [ -f "requirements.txt" ]; then
+            echo "Proyecto detectado: Python (Flask)"
+            echo "PROJECT_TYPE=flask" >> $GITHUB_ENV
           else
-            echo "No se encontró package.json"
+            echo "No se encontró un tipo de proyecto compatible"
             exit 1
           fi
 
       - name: Limpiar y reinstalar dependencias
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
+          case $PROJECT_TYPE in
+            astro|next|react|angular)
+              rm -rf node_modules package-lock.json
+              npm install --legacy-peer-deps
+              ;;
+            flask)
+              pip install -r requirements.txt
+              ;;
+            *)
+              echo "Tipo de proyecto no compatible"
+              exit 1
+              ;;
+          esac
 
       - name: Configurar proyecto según tipo
         run: |
@@ -107,14 +121,8 @@ jobs:
               EOF
               node fix-astro-config.js
               ;;
-            next)
-              echo "Configurando proyecto Next.js..."
-              ;;
-            react)
-              echo "Configurando proyecto React..."
-              ;;
-            angular)
-              echo "Configurando proyecto Angular..."
+            next|react|angular|flask)
+              echo "No se requiere configuración adicional para $PROJECT_TYPE"
               ;;
             *)
               echo "Tipo de proyecto no compatible"
@@ -126,17 +134,14 @@ jobs:
         run: |
           cd ${{ github.event.inputs.repo_name }}
           case $PROJECT_TYPE in
-            astro)
-              npm run build
-              ;;
-            next)
-              npm run build
-              ;;
-            react)
+            astro|next|react)
               npm run build
               ;;
             angular)
               npm run build -- --prod
+              ;;
+            flask)
+              echo "No se requiere build para Flask"
               ;;
             *)
               echo "Tipo de proyecto no compatible"
@@ -160,19 +165,7 @@ jobs:
               CMD ["sh", "-c", "npm run preview -- --host 0.0.0.0 --port 4321"]
               EOF
               ;;
-            next)
-              cat <<'EOF' > Dockerfile
-              FROM node:18-alpine
-              WORKDIR /app
-              COPY package*.json ./  
-              RUN npm install --legacy-peer-deps
-              COPY . .
-              RUN npm run build
-              EXPOSE 3000
-              CMD ["npm", "start"]
-              EOF
-              ;;
-            react)
+            next|react)
               cat <<'EOF' > Dockerfile
               FROM node:18-alpine
               WORKDIR /app
@@ -196,6 +189,16 @@ jobs:
               CMD ["npm", "start"]
               EOF
               ;;
+            flask)
+              cat <<'EOF' > Dockerfile
+              FROM python:3.9-slim
+              WORKDIR /app
+              COPY requirements.txt .
+              RUN pip install -r requirements.txt
+              COPY . .
+              CMD ["python", "app.py"]
+              EOF
+              ;;
             *)
               echo "Tipo de proyecto no compatible"
               exit 1
@@ -210,14 +213,14 @@ jobs:
             astro)
               PORT=4321
               ;;
-            next)
-              PORT=3000
-              ;;
-            react)
+            next|react)
               PORT=3000
               ;;
             angular)
               PORT=80
+              ;;
+            flask)
+              PORT=5000
               ;;
             *)
               echo "Tipo de proyecto no compatible"

@@ -27,26 +27,20 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Verificar existencia de package.json
-        run: |
-          cd ${{ github.event.inputs.repo_name }}
-          if [ ! -f package.json ]; then
-            echo "❌ Error: No se encontró package.json en el repositorio."
-            exit 1
-          fi
-
       - name: Establecer versión de Node.js compatible con Astro 5
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - name: Verificar y regenerar package-lock.json si no existe
+      - name: Verificar existencia de package-lock.json
         run: |
           cd ${{ github.event.inputs.repo_name }}
           if [ ! -f package-lock.json ]; then
             echo "⚠️ package-lock.json no encontrado, generando uno nuevo..."
             npm install --package-lock-only --no-audit --no-fund
+          else
+            echo "✅ package-lock.json encontrado, procediendo con la instalación."
           fi
 
       - name: Limpiar y actualizar dependencias de Astro
@@ -56,8 +50,8 @@ jobs:
           # Eliminar dependencias existentes
           rm -rf node_modules
 
-          # Intentar instalación limpia, fallback a instalación normal si falla
-          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          # Intentar instalación limpia con cache, fallback a instalación normal sin cache
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps --no-cache
 
           # Eliminar adaptadores obsoletos (solo si existen)
           npm uninstall @astrojs/netlify @astrojs/mdx || true

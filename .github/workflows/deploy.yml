@@ -47,9 +47,6 @@ jobs:
           # Eliminar dependencias existentes
           rm -rf node_modules package-lock.json bun.lockb
 
-          # Instalar dependencias sin Node.js
-          deno cache src/entry.mjs
-
           echo "✅ Dependencias de Astro actualizadas correctamente"
 
       - name: Configurar Astro para Deno
@@ -65,11 +62,20 @@ jobs:
 
           export default defineConfig({
             output: 'server',
+            serverEntry: "entry.mjs",
             adapter: deno(),
             integrations: [tailwind(), mdx(), sitemap(), react()]
           });
           EOF
           echo "✅ Configuración de Astro actualizada correctamente"
+
+      - name: Asegurar que entry.mjs existe
+        run: |
+          cd ${{ github.event.inputs.repo_name }}/src
+          if [ ! -f entry.mjs ]; then
+            echo 'export { default } from "./server.js";' > entry.mjs
+            echo "✅ entry.mjs creado correctamente"
+          fi
 
       - name: Build del proyecto Astro
         run: |

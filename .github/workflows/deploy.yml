@@ -35,22 +35,6 @@ jobs:
             exit 1
           fi
 
-      - name: Establecer versión de Node.js compatible con Astro 5
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Generar package-lock.json si no existe
-        run: |
-          cd ${{ github.event.inputs.repo_name }}
-          if [ ! -f package-lock.json ]; then
-            echo "⚠️ package-lock.json no encontrado, generando uno nuevo..."
-            npm install --package-lock-only --no-audit --no-fund
-          else
-            echo "✅ package-lock.json ya existe."
-          fi
-
       - name: Limpiar y actualizar dependencias de Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
@@ -58,11 +42,11 @@ jobs:
           # Eliminar dependencias existentes
           rm -rf node_modules
 
-          # Eliminar adaptador de Netlify si existe
-          npm uninstall @astrojs/netlify || true
+          # Eliminar adaptador de Netlify o Node.js si existe
+          npm uninstall @astrojs/netlify @astrojs/node || true
 
-          # Instalar adaptador de Express
-          npm install @astrojs/express --save-dev --legacy-peer-deps
+          # Instalar adaptador de Deno
+          npm install @astrojs/deno --save-dev --legacy-peer-deps
 
           # Instalar otras dependencias necesarias
           npm install @astrojs/tailwind --save-dev --legacy-peer-deps
@@ -72,12 +56,12 @@ jobs:
 
           echo "✅ Dependencias de Astro actualizadas correctamente"
 
-      - name: Configurar Astro para Express.js
+      - name: Configurar Astro para Deno
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > astro.config.mjs <<EOF
           import { defineConfig } from 'astro/config';
-          import express from '@astrojs/express';
+          import deno from '@astrojs/deno';
           import mdx from '@astrojs/mdx';
           import sitemap from '@astrojs/sitemap';
           import tailwind from "@astrojs/tailwind";
@@ -86,7 +70,7 @@ jobs:
           export default defineConfig({
             integrations: [tailwind(), mdx(), sitemap(), react()],
             output: 'server',
-            adapter: express(),
+            adapter: deno(),
             server: {
               host: true,
               port: 4321
@@ -100,25 +84,21 @@ jobs:
           cd ${{ github.event.inputs.repo_name }}
           npm run build
 
-      - name: Crear Dockerfile para Astro
+      - name: Crear Dockerfile para Astro con Deno
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
-          FROM node:20-alpine
+          FROM denoland/deno:alpine
 
           WORKDIR /app
 
-          COPY package*.json ./
-
-          RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
-
           COPY . .
 
-          RUN npm run build
+          RUN deno cache dist/server/entry.mjs
 
           EXPOSE 4321
 
-          CMD ["node", "dist/server/entry.mjs"]
+          CMD ["deno", "run", "--allow-net", "--allow-read", "dist/server/entry.mjs"]
           EOF
 
       - name: Verificar instalación de doctl
@@ -137,7 +117,7 @@ jobs:
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      - name: Construir y subir imagen Docker para Astro
+      - name: Construir y subir imagen Docker para Astro con Deno
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
@@ -146,7 +126,7 @@ jobs:
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      - name: Crear archivo deployment.yaml para Astro
+      - name: Crear archivo deployment.yaml para Astro con Deno
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s

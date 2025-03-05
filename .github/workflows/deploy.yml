@@ -43,17 +43,22 @@ jobs:
             npm install --package-lock-only --no-audit --no-fund
           fi
 
-      - name: Instalar Node.js
+      - name: Instalar Node.js en la carpeta correcta
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: ${{ github.workspace }}/${{ github.event.inputs.repo_name }}/package-lock.json
 
-      - name: Instalar dependencias
+      - name: Verificar archivos antes de instalar dependencias
         run: |
           cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           echo "📂 Mostrando archivos antes de instalar dependencias:"
           ls -la
+
+      - name: Instalar dependencias
+        run: |
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           npm ci || npm install
           echo "✅ Dependencias instaladas correctamente"
 

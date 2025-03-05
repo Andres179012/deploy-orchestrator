@@ -27,23 +27,29 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Actualizar Astro y el adaptador de Node.js
+      - name: Establecer versión de Node.js compatible con Astro 5
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Limpiar y actualizar dependencias de Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
           
           # Eliminar dependencias existentes
           rm -rf node_modules package-lock.json
 
-          # Instalar la versión correcta de Astro
+          # Instalar Astro en su versión más reciente compatible
           npm install astro@latest --save-exact --force
 
-          # Eliminar Netlify si existe
-          npm uninstall @astrojs/netlify
+          # Eliminar adaptadores obsoletos
+          npm uninstall @astrojs/netlify @astrojs/mdx
 
-          # Instalar el adaptador de Node.js
-          npm install @astrojs/node@latest --save-dev --force
+          # Instalar adaptador de Node.js y otras integraciones compatibles
+          npm install @astrojs/node@latest @astrojs/tailwind@latest --save-dev --force
 
-          echo "✅ Astro y adaptador de Node.js actualizados correctamente"
+          echo "✅ Dependencias de Astro actualizadas correctamente"
 
       - name: Configurar Astro para Node.js
         run: |
@@ -55,7 +61,7 @@ jobs:
           export default defineConfig({
             output: 'server',
             adapter: node({
-              mode: 'standalone' // 🔥 FIX: Se define 'mode' explícitamente
+              mode: 'standalone'
             }),
             server: {
               host: true,
@@ -76,25 +82,18 @@ jobs:
           cat > Dockerfile <<EOF
           FROM node:20-alpine
 
-          # Configurar el directorio de trabajo
           WORKDIR /app
 
-          # Copiar archivos de dependencias primero
           COPY package*.json ./
 
-          # Instalar dependencias de manera eficiente
           RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
-          # Copiar el resto del código fuente
           COPY . .
 
-          # Construir el proyecto Astro
           RUN npm run build
 
-          # Exponer el puerto correcto
           EXPOSE 4321
 
-          # Comando de inicio
           CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
           EOF
 

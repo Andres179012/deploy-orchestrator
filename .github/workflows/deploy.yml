@@ -15,41 +15,140 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout código del repositorio
+      - name: Checkout código del repositorio centralizado
         uses: actions/checkout@v4
 
-      - name: Definir variable de entorno en minúsculas
-        run: echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+      - name: Clonar el repositorio Astro
+        run: |
+          git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
+          cd ${{ github.event.inputs.repo_name }}
 
-      - name: Configurar Node.js
+      - name: Definir variable de entorno en minúsculas
+        run: |
+          echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Verificar existencia de package.json
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          if [ ! -f package.json ]; then
+            echo "❌ Error: No se encontró package.json en el repositorio."
+            exit 1
+          fi
+
+      - name: Establecer versión de Node.js compatible con Astro 5
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - name: Instalar dependencias y construir el proyecto
+      - name: Generar package-lock.json si no existe
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          
-          # Eliminar Netlify si aún existe
+          if [ ! -f package-lock.json ]; then
+            echo "⚠️ package-lock.json no encontrado, generando uno nuevo..."
+            npm install --package-lock-only --no-audit --no-fund
+          else
+            echo "✅ package-lock.json ya existe."
+          fi
+
+      - name: Limpiar y actualizar dependencias de Astro
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+
+          # Eliminar dependencias existentes
+          rm -rf node_modules
+
+          # Eliminar adaptador de Netlify si existe
           npm uninstall @astrojs/netlify || true
-          
-          # Instalar dependencias con Node.js como adaptador
-          npm install @astrojs/node@latest --save-dev --legacy-peer-deps
-          
-          # Construir Astro
+
+          # Instalar adaptador de Node.js
+          npm install @astrojs/node --save-dev --legacy-peer-deps
+
+          # Instalar otras dependencias necesarias
+          npm install @astrojs/tailwind --save-dev --legacy-peer-deps
+
+          # Intentar instalación limpia, fallback a instalación normal si falla
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+          echo "✅ Dependencias de Astro actualizadas correctamente"
+
+      - name: Configurar Astro para Node.js
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          cat > astro.config.mjs <<EOF
+          import { defineConfig } from 'astro/config';
+          import node from '@astrojs/node';
+          import mdx from '@astrojs/mdx';
+          import sitemap from '@astrojs/sitemap';
+          import tailwind from "@astrojs/tailwind";
+          import react from "@astrojs/react";
+
+          export default defineConfig({
+            integrations: [tailwind(), mdx(), sitemap(), react()],
+            output: 'server',
+            adapter: node({
+              mode: 'standalone'
+            }),
+            server: {
+              host: true,
+              port: 4321
+            }
+          });
+          EOF
+          echo "✅ Configuración de Astro actualizada correctamente"
+
+      - name: Build del proyecto Astro
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
           npm run build
 
-      - name: Crear y subir imagen Docker
+      - name: Crear Dockerfile para Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          docker build -t registry.digitalocean.com/cosmly-registry/${{ env.GITHUB_REPO_NAME }}:latest .
-          docker push registry.digitalocean.com/cosmly-registry/${{ env.GITHUB_REPO_NAME }}:latest
+          cat > Dockerfile <<EOF
+          FROM node:20-alpine
+
+          WORKDIR /app
+
+          COPY package*.json ./
+
+          RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+          COPY . .
+
+          RUN npm run build
+
+          EXPOSE 4321
+
+          CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
+          EOF
+
+      - name: Verificar instalación de doctl
+        run: |
+          if ! command -v doctl &> /dev/null
+          then
+            echo "❌ Error: 'doctl' no está instalado. Revisar configuración."
+            exit 1
+          fi
+
+      - name: Iniciar sesión en DigitalOcean
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Iniciar sesión en el Container Registry
+        run: doctl registry login
+
+      - name: Construir y subir imagen Docker para Astro
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
+          docker push registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
 
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      - name: Crear `deployment.yaml`
+      - name: Crear archivo deployment.yaml para Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s
@@ -57,20 +156,20 @@ jobs:
           apiVersion: apps/v1
           kind: Deployment
           metadata:
-            name: ${{ env.GITHUB_REPO_NAME }}
+            name: ${GITHUB_REPO_NAME}
           spec:
             replicas: 1
             selector:
               matchLabels:
-                app: ${{ env.GITHUB_REPO_NAME }}
+                app: ${GITHUB_REPO_NAME}
             template:
               metadata:
                 labels:
-                  app: ${{ env.GITHUB_REPO_NAME }}
+                  app: ${GITHUB_REPO_NAME}
               spec:
                 containers:
-                  - name: ${{ env.GITHUB_REPO_NAME }}
-                    image: registry.digitalocean.com/cosmly-registry/${{ env.GITHUB_REPO_NAME }}:latest
+                  - name: ${GITHUB_REPO_NAME}
+                    image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
                     ports:
                       - containerPort: 4321
                     imagePullPolicy: Always
@@ -83,10 +182,10 @@ jobs:
           apiVersion: v1
           kind: Service
           metadata:
-            name: ${{ env.GITHUB_REPO_NAME }}-service
+            name: ${GITHUB_REPO_NAME}-service
           spec:
             selector:
-              app: ${{ env.GITHUB_REPO_NAME }}
+              app: ${GITHUB_REPO_NAME}
             ports:
               - protocol: TCP
                 port: 80
@@ -103,9 +202,9 @@ jobs:
         run: |
           cd ${{ github.event.inputs.repo_name }}
           kubectl apply -f k8s/deployment.yaml
-          kubectl rollout restart deployment/${{ env.GITHUB_REPO_NAME }}
+          kubectl rollout restart deployment/${GITHUB_REPO_NAME}
 
       - name: Verificar estado del deployment en Kubernetes
         run: |
           sleep 10
-          kubectl get pods -l app=${{ env.GITHUB_REPO_NAME }}
+          kubectl get pods -l app=${GITHUB_REPO_NAME}

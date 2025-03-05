@@ -27,14 +27,23 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Actualizar Astro y el adaptador de Node
+      - name: Actualizar Astro y el adaptador de Node.js
         run: |
           cd ${{ github.event.inputs.repo_name }}
+          
+          # Eliminar dependencias existentes
           rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
-          npm uninstall @astrojs/netlify
-          npm install @astrojs/node@latest --save-dev
 
+          # Instalar la versión correcta de Astro
+          npm install astro@latest --save-exact --force
+
+          # Eliminar Netlify si existe
+          npm uninstall @astrojs/netlify
+
+          # Instalar el adaptador de Node.js
+          npm install @astrojs/node@latest --save-dev --force
+
+          echo "✅ Astro y adaptador de Node.js actualizados correctamente"
 
       - name: Configurar Astro para Node.js
         run: |
@@ -46,7 +55,7 @@ jobs:
           export default defineConfig({
             output: 'server',
             adapter: node({
-              mode: 'standalone' // 🔥 FIX: Ahora se define 'mode' explícitamente
+              mode: 'standalone' // 🔥 FIX: Se define 'mode' explícitamente
             }),
             server: {
               host: true,
@@ -54,7 +63,7 @@ jobs:
             }
           });
           EOF
-          echo '✅ Configuración de Astro actualizada correctamente'
+          echo "✅ Configuración de Astro actualizada correctamente"
 
       - name: Build del proyecto Astro
         run: |
@@ -67,14 +76,14 @@ jobs:
           cat > Dockerfile <<EOF
           FROM node:20-alpine
 
-          # Configuración del directorio de trabajo
+          # Configurar el directorio de trabajo
           WORKDIR /app
 
-          # Copiar package.json y package-lock.json primero
+          # Copiar archivos de dependencias primero
           COPY package*.json ./
 
-          # Usar npm ci si hay package-lock.json, sino fallback a npm install
-          RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
+          # Instalar dependencias de manera eficiente
+          RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
           # Copiar el resto del código fuente
           COPY . .
@@ -89,6 +98,13 @@ jobs:
           CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
           EOF
 
+      - name: Verificar instalación de doctl
+        run: |
+          if ! command -v doctl &> /dev/null
+          then
+            echo "❌ Error: 'doctl' no está instalado. Revisar configuración."
+            exit 1
+          fi
 
       - name: Iniciar sesión en DigitalOcean
         uses: digitalocean/action-doctl@v2
@@ -167,4 +183,3 @@ jobs:
         run: |
           sleep 10
           kubectl get pods -l app=${GITHUB_REPO_NAME}
-

@@ -88,6 +88,13 @@ jobs:
           CMD ["sh", "-c", "until nc -z localhost 4321; do sleep 1; done && npm run preview -- --host --port 4321"]
           EOF
 
+      - name: Instalar doctl
+        run: |
+          curl -sL https://github.com/digitalocean/doctl/releases/latest/download/doctl-$(uname -s)-$(uname -m) \
+            -o /usr/local/bin/doctl
+          chmod +x /usr/local/bin/doctl
+          echo "✅ doctl instalado correctamente"
+
       - name: Verificar instalación de doctl
         run: |
           if ! command -v doctl &> /dev/null
@@ -95,6 +102,7 @@ jobs:
             echo "❌ Error: 'doctl' no está instalado. Revisar configuración."
             exit 1
           fi
+          echo "✅ doctl está instalado correctamente"
 
       - name: Iniciar sesión en DigitalOcean
         uses: digitalocean/action-doctl@v2

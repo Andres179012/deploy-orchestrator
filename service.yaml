@@ -2,9 +2,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: djhomeremodelersinc-seo-service
-  namespace: default
 spec:
-  type: ClusterIP  # 🔥 Cambiado de LoadBalancer a ClusterIP
+  type: LoadBalancer
   selector:
     app: djhomeremodelersinc-seo
   ports:

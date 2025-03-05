@@ -26,88 +26,204 @@ jobs:
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
+      - name: Detectar tipo de proyecto
+        id: detect-project
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          if [ -f "package.json" ]; then
+            if grep -q '"astro"' package.json; then
+              echo "Proyecto detectado: Astro"
+              echo "PROJECT_TYPE=astro" >> $GITHUB_ENV
+            elif grep -q '"next"' package.json; then
+              echo "Proyecto detectado: Next.js"
+              echo "PROJECT_TYPE=next" >> $GITHUB_ENV
+            elif grep -q '"react-scripts"' package.json; then
+              echo "Proyecto detectado: React"
+              echo "PROJECT_TYPE=react" >> $GITHUB_ENV
+            elif grep -q '"@angular/core"' package.json; then
+              echo "Proyecto detectado: Angular"
+              echo "PROJECT_TYPE=angular" >> $GITHUB_ENV
+            else
+              echo "Proyecto no compatible detectado"
+              exit 1
+            fi
+          else
+            echo "No se encontró package.json"
+            exit 1
+          fi
+
       - name: Limpiar y reinstalar dependencias
         run: |
           cd ${{ github.event.inputs.repo_name }}
           rm -rf node_modules package-lock.json
           npm install --legacy-peer-deps
 
-      - name: Instalar versión compatible de `@astrojs/node`
+      - name: Configurar proyecto según tipo
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          npm install @astrojs/node@4 --save-dev --legacy-peer-deps
+          case $PROJECT_TYPE in
+            astro)
+              echo "Configurando proyecto Astro..."
+              npm install @astrojs/node@4 --save-dev --legacy-peer-deps
+              cat <<EOF > fix-astro-config.js
+              const fs = require('fs');
+              const filePath = './astro.config.mjs';
 
-      - name: Crear script para corregir astro.config.mjs
-        run: |
-          cat <<EOF > fix-astro-config.js
-          const fs = require('fs');
-          const filePath = './astro.config.mjs';
+              if (!fs.existsSync(filePath)) {
+                console.log('❌ No se encontró astro.config.mjs');
+                process.exit(0);
+              }
 
-          if (!fs.existsSync(filePath)) {
-            console.log('❌ No se encontró astro.config.mjs');
-            process.exit(0);
-          }
+              let content = fs.readFileSync(filePath, 'utf8');
 
-          let content = fs.readFileSync(filePath, 'utf8');
+              if (!content.includes("import { defineConfig } from 'astro/config';")) {
+                content = "import { defineConfig } from 'astro/config';\n" + content;
+              }
+              if (!content.includes("import node from '@astrojs/node';")) {
+                content = "import node from '@astrojs/node';\n" + content;
+              }
 
-          if (!content.includes("import { defineConfig } from 'astro/config';")) {
-            content = "import { defineConfig } from 'astro/config';\n" + content;
-          }
-          if (!content.includes("import node from '@astrojs/node';")) {
-            content = "import node from '@astrojs/node';\n" + content;
-          }
+              content = content.replace(/import netlify.*\n?/g, '');
+              content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
 
-          content = content.replace(/import netlify.*\n?/g, '');
-          content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
+              const astroConfig = \`
+              import { defineConfig } from 'astro/config';
+              import node from '@astrojs/node';
 
-          const astroConfig = \`
-          import { defineConfig } from 'astro/config';
-          import node from '@astrojs/node';
+              export default defineConfig({
+                output: 'server',
+                adapter: node({
+                  mode: 'middleware',
+                }),
+                server: {
+                  host: true,
+                  port: 4321
+                }
+              });
+              \`;
 
-          export default defineConfig({
-            output: 'server',
-            adapter: node({
-              mode: 'middleware',
-            }),
-            server: {
-              host: true,  // 🔥 Asegura que escuche en 0.0.0.0
-              port: 4321
-            }
-          });
-          \`;
+              fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
+              console.log('✅ astro.config.mjs actualizado correctamente');
+              EOF
+              node fix-astro-config.js
+              ;;
+            next)
+              echo "Configurando proyecto Next.js..."
+              ;;
+            react)
+              echo "Configurando proyecto React..."
+              ;;
+            angular)
+              echo "Configurando proyecto Angular..."
+              ;;
+            *)
+              echo "Tipo de proyecto no compatible"
+              exit 1
+              ;;
+          esac
 
-          fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
-          console.log('✅ astro.config.mjs actualizado correctamente');
-          EOF
-
-      - name: Corregir Astro antes del build
+      - name: Build del proyecto
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          node ../fix-astro-config.js
-
-      - name: Build Astro project
-        run: |
-          cd ${{ github.event.inputs.repo_name }}
-          npm run build
+          case $PROJECT_TYPE in
+            astro)
+              npm run build
+              ;;
+            next)
+              npm run build
+              ;;
+            react)
+              npm run build
+              ;;
+            angular)
+              npm run build -- --prod
+              ;;
+            *)
+              echo "Tipo de proyecto no compatible"
+              exit 1
+              ;;
+          esac
 
       - name: Crear Dockerfile
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          cat <<EOF > Dockerfile
-          FROM node:18-alpine
-          WORKDIR /app
-          COPY package*.json ./  
-          RUN npm install --legacy-peer-deps
-          COPY . .
-          RUN npm run build
-          EXPOSE 4321
-          CMD ["sh", "-c", "npm run preview -- --host 0.0.0.0 --port 4321"]
-          EOF
+          case $PROJECT_TYPE in
+            astro)
+              cat <<EOF > Dockerfile
+              FROM node:18-alpine
+              WORKDIR /app
+              COPY package*.json ./  
+              RUN npm install --legacy-peer-deps
+              COPY . .
+              RUN npm run build
+              EXPOSE 4321
+              CMD ["sh", "-c", "npm run preview -- --host 0.0.0.0 --port 4321"]
+              EOF
+              ;;
+            next)
+              cat <<EOF > Dockerfile
+              FROM node:18-alpine
+              WORKDIR /app
+              COPY package*.json ./  
+              RUN npm install --legacy-peer-deps
+              COPY . .
+              RUN npm run build
+              EXPOSE 3000
+              CMD ["npm", "start"]
+              EOF
+              ;;
+            react)
+              cat <<EOF > Dockerfile
+              FROM node:18-alpine
+              WORKDIR /app
+              COPY package*.json ./  
+              RUN npm install --legacy-peer-deps
+              COPY . .
+              RUN npm run build
+              EXPOSE 3000
+              CMD ["npm", "start"]
+              EOF
+              ;;
+            angular)
+              cat <<EOF > Dockerfile
+              FROM node:18-alpine
+              WORKDIR /app
+              COPY package*.json ./  
+              RUN npm install --legacy-peer-deps
+              COPY . .
+              RUN npm run build -- --prod
+              EXPOSE 80
+              CMD ["npm", "start"]
+              EOF
+              ;;
+            *)
+              echo "Tipo de proyecto no compatible"
+              exit 1
+              ;;
+          esac
 
       - name: Crear archivo deployment.yaml
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s
+          case $PROJECT_TYPE in
+            astro)
+              PORT=4321
+              ;;
+            next)
+              PORT=3000
+              ;;
+            react)
+              PORT=3000
+              ;;
+            angular)
+              PORT=80
+              ;;
+            *)
+              echo "Tipo de proyecto no compatible"
+              exit 1
+              ;;
+          esac
           cat <<EOF > k8s/deployment.yaml
           apiVersion: apps/v1
           kind: Deployment
@@ -127,11 +243,11 @@ jobs:
                   - name: ${GITHUB_REPO_NAME}
                     image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
                     ports:
-                      - containerPort: 4321
+                      - containerPort: ${PORT}
                     imagePullPolicy: Always
                     env:
                       - name: PORT
-                        value: "4321"
+                        value: "${PORT}"
                       - name: HOST
                         value: "0.0.0.0"
           --- 
@@ -145,7 +261,7 @@ jobs:
             ports:
               - protocol: TCP
                 port: 80
-                targetPort: 4321
+                targetPort: ${PORT}
             type: LoadBalancer
           EOF
 

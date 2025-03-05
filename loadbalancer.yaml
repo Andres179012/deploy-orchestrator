@@ -6,6 +6,7 @@ metadata:
     service.beta.kubernetes.io/do-loadbalancer-name: "global-lb"
 spec:
   type: LoadBalancer
+  loadBalancerIP: 165.227.253.14  # 🛑 Usa la IP Reservada
   selector:
     app: traefik
   ports:

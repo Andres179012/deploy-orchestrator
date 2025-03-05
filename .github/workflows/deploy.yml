@@ -35,7 +35,7 @@ jobs:
             exit 1
           fi
 
-      - name: Configurar Bun (en lugar de Node.js)
+      - name: Instalar Bun (en lugar de Node.js)
         uses: oven-sh/setup-bun@v1
 
       - name: Limpiar y actualizar dependencias de Astro
@@ -50,27 +50,21 @@ jobs:
 
           echo "✅ Dependencias de Astro actualizadas correctamente"
 
-      - name: Configurar Astro con Node (via Bun)
+      - name: Configurar Astro para Cloudflare Workers
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > astro.config.mjs <<EOF
           import { defineConfig } from 'astro/config';
-          import node from '@astrojs/node';
+          import cloudflare from '@astrojs/cloudflare';
           import mdx from '@astrojs/mdx';
           import sitemap from '@astrojs/sitemap';
           import tailwind from "@astrojs/tailwind";
           import react from "@astrojs/react";
 
           export default defineConfig({
-            integrations: [tailwind(), mdx(), sitemap(), react()],
             output: 'server',
-            adapter: node({
-              mode: 'standalone'
-            }),
-            server: {
-              host: true,
-              port: 4321
-            }
+            adapter: cloudflare(),
+            integrations: [tailwind(), mdx(), sitemap(), react()]
           });
           EOF
           echo "✅ Configuración de Astro actualizada correctamente"
@@ -80,24 +74,22 @@ jobs:
           cd ${{ github.event.inputs.repo_name }}
           bun run build
 
-      - name: Crear Dockerfile para Astro con Bun
+      - name: Crear Dockerfile para Astro en Cloudflare
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
-          FROM oven/bun:latest
+          FROM node:20-alpine
 
           WORKDIR /app
 
-          COPY package.json bun.lockb ./
-          RUN bun install --frozen-lockfile
-
           COPY . .
 
-          RUN bun run build
+          RUN npm install -g wrangler
+          RUN wrangler publish --env production
 
-          EXPOSE 4321
+          EXPOSE 80
 
-          CMD ["bun", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
+          CMD ["wrangler", "dev"]
           EOF
 
       - name: Verificar instalación de doctl
@@ -116,7 +108,7 @@ jobs:
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      - name: Construir y subir imagen Docker para Astro con Bun
+      - name: Construir y subir imagen Docker para Astro en Cloudflare
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
@@ -125,7 +117,7 @@ jobs:
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      - name: Crear archivo deployment.yaml para Astro con Bun
+      - name: Crear archivo deployment.yaml para Astro en Cloudflare
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s
@@ -148,13 +140,8 @@ jobs:
                   - name: ${GITHUB_REPO_NAME}
                     image: registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
                     ports:
-                      - containerPort: 4321
+                      - containerPort: 80
                     imagePullPolicy: Always
-                    env:
-                      - name: PORT
-                        value: "4321"
-                      - name: HOST
-                        value: "0.0.0.0"
           ---
           apiVersion: v1
           kind: Service
@@ -166,7 +153,7 @@ jobs:
             ports:
               - protocol: TCP
                 port: 80
-                targetPort: 4321
+                targetPort: 80
             type: LoadBalancer
           EOF
 

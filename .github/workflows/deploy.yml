@@ -35,33 +35,27 @@ jobs:
             exit 1
           fi
 
+      - name: Configurar Bun (en lugar de Node.js)
+        uses: oven-sh/setup-bun@v1
+
       - name: Limpiar y actualizar dependencias de Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
 
           # Eliminar dependencias existentes
-          rm -rf node_modules
+          rm -rf node_modules bun.lockb
 
-          # Eliminar adaptador de Netlify o Node.js si existe
-          npm uninstall @astrojs/netlify @astrojs/node || true
-
-          # Instalar adaptador de Deno
-          npm install @astrojs/deno --save-dev --legacy-peer-deps
-
-          # Instalar otras dependencias necesarias
-          npm install @astrojs/tailwind --save-dev --legacy-peer-deps
-
-          # Intentar instalación limpia, fallback a instalación normal si falla
-          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          # Instalar dependencias con Bun
+          bun install --frozen-lockfile
 
           echo "✅ Dependencias de Astro actualizadas correctamente"
 
-      - name: Configurar Astro para Deno
+      - name: Configurar Astro con Node (via Bun)
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > astro.config.mjs <<EOF
           import { defineConfig } from 'astro/config';
-          import deno from '@astrojs/deno';
+          import node from '@astrojs/node';
           import mdx from '@astrojs/mdx';
           import sitemap from '@astrojs/sitemap';
           import tailwind from "@astrojs/tailwind";
@@ -70,7 +64,9 @@ jobs:
           export default defineConfig({
             integrations: [tailwind(), mdx(), sitemap(), react()],
             output: 'server',
-            adapter: deno(),
+            adapter: node({
+              mode: 'standalone'
+            }),
             server: {
               host: true,
               port: 4321
@@ -82,23 +78,26 @@ jobs:
       - name: Build del proyecto Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          npm run build
+          bun run build
 
-      - name: Crear Dockerfile para Astro con Deno
+      - name: Crear Dockerfile para Astro con Bun
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
-          FROM denoland/deno:alpine
+          FROM oven/bun:latest
 
           WORKDIR /app
 
+          COPY package.json bun.lockb ./
+          RUN bun install --frozen-lockfile
+
           COPY . .
 
-          RUN deno cache dist/server/entry.mjs
+          RUN bun run build
 
           EXPOSE 4321
 
-          CMD ["deno", "run", "--allow-net", "--allow-read", "dist/server/entry.mjs"]
+          CMD ["bun", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
           EOF
 
       - name: Verificar instalación de doctl
@@ -117,7 +116,7 @@ jobs:
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      - name: Construir y subir imagen Docker para Astro con Deno
+      - name: Construir y subir imagen Docker para Astro con Bun
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
@@ -126,7 +125,7 @@ jobs:
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      - name: Crear archivo deployment.yaml para Astro con Deno
+      - name: Crear archivo deployment.yaml para Astro con Bun
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s

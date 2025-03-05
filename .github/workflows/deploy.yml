@@ -21,18 +21,26 @@ jobs:
       - name: Clonar el repositorio Astro
         run: |
           git clone https://${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.event.inputs.repo_owner }}/${{ github.event.inputs.repo_name }}.git
-          cd ${{ github.event.inputs.repo_name }}
 
       - name: Definir variable de entorno en minúsculas
         run: |
           echo "GITHUB_REPO_NAME=$(echo ${{ github.event.inputs.repo_name }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Verificar existencia de package.json
+      - name: Verificar estructura del directorio
         run: |
-          cd ${{ github.event.inputs.repo_name }}
+          echo "📂 Estructura del directorio después del checkout:"
+          ls -la ${{ github.workspace }}
+
+      - name: Verificar existencia de package.json y package-lock.json
+        run: |
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           if [ ! -f package.json ]; then
             echo "❌ Error: No se encontró package.json en el repositorio."
             exit 1
+          fi
+          if [ ! -f package-lock.json ]; then
+            echo "⚠️ package-lock.json no encontrado, generando uno nuevo..."
+            npm install --package-lock-only --no-audit --no-fund
           fi
 
       - name: Instalar Node.js
@@ -41,20 +49,20 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Instalar dependencias con npm ci
+      - name: Instalar dependencias
         run: |
-          cd ${{ github.event.inputs.repo_name }}
-          npm ci
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
+          npm ci || npm install
           echo "✅ Dependencias instaladas correctamente"
 
       - name: Build del proyecto Astro
         run: |
-          cd ${{ github.event.inputs.repo_name }}
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           npm run build
 
       - name: Crear Dockerfile optimizado para Astro
         run: |
-          cd ${{ github.event.inputs.repo_name }}
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
           FROM node:20-alpine
 
@@ -62,7 +70,7 @@ jobs:
 
           COPY package*.json ./
 
-          RUN npm ci --omit=dev
+          RUN npm ci --omit=dev || npm install --omit=dev
 
           COPY . .
 
@@ -91,7 +99,7 @@ jobs:
 
       - name: Construir y subir imagen Docker optimizada para Astro
         run: |
-          cd ${{ github.event.inputs.repo_name }}
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
           docker push registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest
 
@@ -100,7 +108,7 @@ jobs:
 
       - name: Crear archivo deployment.yaml optimizado para Astro
         run: |
-          cd ${{ github.event.inputs.repo_name }}
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           mkdir -p k8s
           cat > k8s/deployment.yaml <<EOF
           apiVersion: apps/v1
@@ -140,12 +148,12 @@ jobs:
 
       - name: Validar deployment.yaml
         run: |
-          cd ${{ github.event.inputs.repo_name }}
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           kubectl apply --dry-run=client -f k8s/deployment.yaml
 
       - name: Desplegar en Kubernetes
         run: |
-          cd ${{ github.event.inputs.repo_name }}
+          cd ${{ github.workspace }}/${{ github.event.inputs.repo_name }}
           kubectl apply -f k8s/deployment.yaml
           kubectl rollout restart deployment/${GITHUB_REPO_NAME}
 

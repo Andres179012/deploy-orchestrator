@@ -33,51 +33,28 @@ jobs:
           rm -rf node_modules package-lock.json
           npm install --legacy-peer-deps
 
+      - name: Actualizar Astro y el adaptador de Node
+        run: |
+          cd ${{ github.event.inputs.repo_name }}
+          npm install astro@latest @astrojs/node@latest --save-dev --legacy-peer-deps
+
       - name: Configurar Astro para Node.js
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          npm install @astrojs/node@4 --save-dev --legacy-peer-deps
-          cat > fix-astro-config.cjs <<EOF
-          const fs = require('fs');
-          const filePath = './astro.config.mjs';
-
-          if (!fs.existsSync(filePath)) {
-            console.log('❌ No se encontró astro.config.mjs');
-            process.exit(0);
-          }
-
-          let content = fs.readFileSync(filePath, 'utf8');
-
-          if (!content.includes("import { defineConfig } from 'astro/config';")) {
-            content = "import { defineConfig } from 'astro/config';\n" + content;
-          }
-          if (!content.includes("import node from '@astrojs/node';")) {
-            content = "import node from '@astrojs/node';\n" + content;
-          }
-
-          content = content.replace(/import netlify.*\n?/g, '');
-          content = content.replace(/adapter:\s*netlify\(.*?\),?/gs, '');
-
-          const astroConfig = \`
+          cat > astro.config.mjs <<EOF
           import { defineConfig } from 'astro/config';
           import node from '@astrojs/node';
 
           export default defineConfig({
             output: 'server',
-            adapter: node({
-              mode: 'middleware',
-            }),
+            adapter: node(),
             server: {
               host: true,
               port: 4321
             }
           });
-          \`;
-
-          fs.writeFileSync(filePath, astroConfig.trim(), 'utf8');
-          console.log('✅ astro.config.mjs actualizado correctamente');
           EOF
-          node fix-astro-config.cjs
+          echo '✅ Configuración de Astro actualizada correctamente'
 
       - name: Build del proyecto Astro
         run: |
@@ -88,7 +65,7 @@ jobs:
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
-          FROM node:18-alpine
+          FROM node:20-alpine
           WORKDIR /app
           COPY package*.json ./
           RUN npm install --legacy-peer-deps

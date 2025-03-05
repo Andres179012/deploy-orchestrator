@@ -35,34 +35,24 @@ jobs:
             exit 1
           fi
 
-      - name: Instalar dependencias
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Instalar dependencias con npm ci
         run: |
           cd ${{ github.event.inputs.repo_name }}
-          npm install
+          npm ci
           echo "✅ Dependencias instaladas correctamente"
-
-      - name: Configurar Astro sin adaptador
-        run: |
-          cd ${{ github.event.inputs.repo_name }}
-          cat > astro.config.mjs <<EOF
-          import { defineConfig } from 'astro/config';
-          import mdx from '@astrojs/mdx';
-          import sitemap from '@astrojs/sitemap';
-          import tailwind from "@astrojs/tailwind";
-          import react from "@astrojs/react";
-
-          export default defineConfig({
-            integrations: [tailwind(), mdx(), sitemap(), react()]
-          });
-          EOF
-          echo "✅ Configuración de Astro actualizada correctamente"
 
       - name: Build del proyecto Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
           npm run build
 
-      - name: Crear Dockerfile para Astro sin adaptador
+      - name: Crear Dockerfile optimizado para Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
           cat > Dockerfile <<EOF
@@ -72,7 +62,7 @@ jobs:
 
           COPY package*.json ./
 
-          RUN npm install --omit=dev
+          RUN npm ci --omit=dev
 
           COPY . .
 
@@ -80,7 +70,7 @@ jobs:
 
           EXPOSE 4321
 
-          CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4321"]
+          CMD ["sh", "-c", "until nc -z localhost 4321; do sleep 1; done && npm run preview -- --host --port 4321"]
           EOF
 
       - name: Verificar instalación de doctl
@@ -99,7 +89,7 @@ jobs:
       - name: Iniciar sesión en el Container Registry
         run: doctl registry login
 
-      - name: Construir y subir imagen Docker para Astro sin adaptador
+      - name: Construir y subir imagen Docker optimizada para Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
           docker build -t registry.digitalocean.com/cosmly-registry/${GITHUB_REPO_NAME}:latest .
@@ -108,7 +98,7 @@ jobs:
       - name: Configurar kubectl
         run: doctl kubernetes cluster kubeconfig save k8s-1-32-1-do-0-nyc1-1740853375666
 
-      - name: Crear archivo deployment.yaml para Astro sin adaptador
+      - name: Crear archivo deployment.yaml optimizado para Astro
         run: |
           cd ${{ github.event.inputs.repo_name }}
           mkdir -p k8s

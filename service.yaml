@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: djhomeremodelersinc-seo-service
+  name: cultural-project-service
 spec:
   type: LoadBalancer
   selector:
-    app: djhomeremodelersinc-seo
+    app: cultural-project
   ports:
     - protocol: TCP
       port: 80

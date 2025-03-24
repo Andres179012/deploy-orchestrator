@@ -1,3 +1,3 @@
 # deploy-orchestrator
 
-project for Automatic Deploy in DigitalOcean
+project for Automatic Deploy in DigitalOcean and Kubernetes

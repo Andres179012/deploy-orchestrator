@@ -1,5 +1,6 @@
 # deploy-orchestrator
 Based on Netlify
+For templates with automatic updates
 change Accont of Digital Ocean
 Based on Unique Repository
 Updates based in new components
